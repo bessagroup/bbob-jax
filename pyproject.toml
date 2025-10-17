@@ -1,3 +1,9 @@
-[build-system]
-requires = ["setuptools>=43.0.0", "wheel"]
-build-backend = "setuptools.build_meta"
+[project]
+name = "bbob-jax"
+version = "0.1.0"
+description = "BBOB Benchmark function implemented in JAX"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "jax",
+]

@@ -1,0 +1,28 @@
+import jax
+import jax.numpy as jnp
+
+
+def tosz_func(x):
+    def transform(xi):
+        c1, c2 = 10., 7.9
+        x_sign = jnp.where(xi > 0, 1.0, jnp.where(xi < 0, -1.0, 0.0))
+        x_star = jnp.log(jnp.abs(xi))
+        return x_sign * jnp.exp(x_star + 0.049 * (jnp.sin(c1 * x_star) + jnp.sin(c2 * x_star)))
+
+    x = jnp.array(x).ravel()
+    transformed_x = jnp.where((x == x[0]) | (x == x[-1]), transform(x), x)
+    return transformed_x
+
+
+def tasy_func(x: jax.Array, beta=0.5) -> jax.Array:
+    ndim = x.shape[-1]
+    idx = jnp.arange(0, ndim)
+    up = 1 + beta * ((idx - 1) / (ndim - 1)) * jnp.sqrt(jnp.abs(x))
+    x_temp = jnp.abs(x) ** up
+    return jnp.where(x > 0, x_temp, x)
+
+
+def diag_func(size: int, alpha: float = 10.0) -> jax.Array:
+    idx = jnp.arange(size, dtype=jnp.float32)
+    diagonal = alpha ** (idx / (2 * (size - 1)))
+    return jnp.diag(diagonal)
