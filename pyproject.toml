@@ -6,4 +6,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "jax",
+    "jaxtyping>=0.3.3",
+]
+
+[dependency-groups]
+dev = [
+    "matplotlib>=3.10.7",
 ]
