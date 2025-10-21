@@ -2,29 +2,23 @@ name: release
 
 on:
   push:
-    tags:
-      # Publish on any tag starting with a `v`, e.g., v1.2.3
-      - v*
+    branches:
+      - main
 
 jobs:
-  pypi:
-    name: Publish to PyPI
+  build:
     runs-on: ubuntu-latest
-    # Environment and permissions trusted publishing.
-    environment:
-      # Create this environment in the GitHub repository under Settings -> Environments
-      name: pypi
-    permissions:
-      id-token: write
-      contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-      - name: Install Python 3.11
-        run: uv python install 3.11
-      - name: Build
-        run: uv build
-      - name: Publish
-        run: uv publish
+      - name: Release
+        uses: patrick-kidger/action_update_python_project@v8
+        with:
+          python-version: "3.11"
+          test-script: |
+            cp -r ${{ github.workspace }}/tests ./tests
+            cp ${{ github.workspace }}/pyproject.toml ./pyproject.toml
+            uv sync --extra tests --no-install-project --inexact
+            uv run --no-sync pytest
+          pypi-token: ${{ secrets.pypi_token }}
+          github-user: bessagroup
+          github-token: ${{ github.token }}
+          allow-first-release: true

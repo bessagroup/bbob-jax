@@ -64,3 +64,8 @@ package = true
 dev = [
     "matplotlib>=3.10.7",
 ]
+
+[project.optional-dependencies]
+tests = [
+  "pytest"
+]
