@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import jax.random as jr
 
 
 def tosz_func(x):
@@ -22,7 +23,29 @@ def tasy_func(x: jax.Array, beta=0.5) -> jax.Array:
     return jnp.where(x > 0, x_temp, x)
 
 
-def diag_func(size: int, alpha: float = 10.0) -> jax.Array:
+def lambda_func(size: int, alpha: float = 10.0) -> jax.Array:
     idx = jnp.arange(size, dtype=jnp.float32)
     diagonal = alpha ** (idx / (2 * (size - 1)))
     return jnp.diag(diagonal)
+
+
+def rotation_matrix(dim: int, key: jax.Array) -> jax.Array:
+    """Generate a random orthogonal rotation matrix."""
+    R = jr.normal(key, shape=(dim, dim))
+    Q, R_ = jnp.linalg.qr(R)
+    # Ensure a right-handed coordinate system (determinant = +1)
+    d = jnp.sign(jnp.linalg.det(Q))
+    Q = Q * d
+    return Q
+
+
+def penalty(x: jax.Array) -> jax.Array:
+    return jnp.sum(
+        jnp.power(jnp.maximum(jnp.abs(x) - 5.0, 0.0), 2),
+        axis=-1
+    )
+
+
+def bernoulli_vector(dim: int, key: jax.Array) -> jax.Array:
+    """Generate a random Bernoulli matrix with entries -1 or 1."""
+    return jr.bernoulli(key, p=0.5, shape=(dim,)).astype(jnp.float32) * 2 - 1
