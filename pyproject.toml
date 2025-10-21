@@ -3,11 +3,62 @@ name = "bbob-jax"
 version = "0.1.0"
 description = "BBOB Benchmark function implemented in JAX"
 readme = "README.md"
-requires-python = ">=3.10"
+authors = [
+    {name = "M.P. van der Schelling", email = "m.p.vanderschelling@tudelft.nl"}
+]
+maintainers = [
+    {name = "M.P. van der Schelling", email = "m.p.vanderschelling@tudelft.nl"}
+]
+classifiers = [
+
+]
+
+license = {text = "BSD-3-Clause"}
+
 dependencies = [
     "jax",
     "jaxtyping>=0.3.3",
 ]
+
+requires-python = ">=3.10"
+
+
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E226",
+    "E3",
+    "E731",
+    "C901",
+    "UP045",
+    "B027",
+    "B012",
+]
+
+exclude = [
+    "__pycache__",
+    "dist",
+	"*.egg",
+	"docs/source",
+	"tests",
+	".git",
+	"notebooks",
+	"tests/*",
+    "docs/*",
+]
+
+[tool.uv]
+package = true
 
 [dependency-groups]
 dev = [
