@@ -18,6 +18,7 @@ license = {text = "BSD-3-Clause"}
 dependencies = [
     "jax",
     "jaxtyping>=0.3.3",
+    "matplotlib>=3.10.7",
 ]
 
 requires-python = ">=3.10"
@@ -61,9 +62,6 @@ exclude = [
 package = true
 
 [dependency-groups]
-dev = [
-    "matplotlib>=3.10.7",
-]
 
 [project.optional-dependencies]
 tests = [
