@@ -6,13 +6,32 @@ BBOB Benchmark set for Jax - BBOB Benchmark function implemented in JAX
 # =============================================================================
 
 # Standard
-from bbob_jax._src import bbob
-from bbob_jax._src.plotting import plot_2d, plot_3d
+from bbob_jax._src.bbob import (
+    attractive_sector,
+    bent_cigar,
+    discuss,
+    ellipsoid,
+    gallagher_21_peaks,
+    gallagher_101_peaks,
+    griewank_rosenbrock_f8f2,
+    katsuura,
+    linear_slope,
+    lunacek_bi_rastrigin,
+    rastrigin,
+    rastrigin_seperable,
+    rosenbrock,
+    rosenbrock_rotated,
+    schaffer_f7_condition_10,
+    schaffer_f7_condition_1000,
+    schwefel_xsinx,
+    sharp_ridge,
+    skew_rastrigin_bueche,
+    sphere,
+    step_ellipsoid,
+    sum_of_different_powers,
+    weierstrass,
+)
 from bbob_jax._src.registry import registry, registry_original
-
-# Third-party
-
-# Local
 
 #                                                        Authorship and Credits
 # =============================================================================
@@ -24,9 +43,30 @@ __status__ = "Stable"
 
 
 __all__ = [
-    "plot_3d",
-    "plot_2d",
     "registry",
     "registry_original",
     "bbob",
+    "attractive_sector",
+    "bent_cigar",
+    "discuss",
+    "ellipsoid",
+    "gallagher_21_peaks",
+    "gallagher_101_peaks",
+    "griewank_rosenbrock_f8f2",
+    "katsuura",
+    "linear_slope",
+    "lunacek_bi_rastrigin",
+    "rastrigin",
+    "rastrigin_seperable",
+    "rosenbrock",
+    "rosenbrock_rotated",
+    "schaffer_f7_condition_10",
+    "schaffer_f7_condition_1000",
+    "schwefel_xsinx",
+    "sharp_ridge",
+    "skew_rastrigin_bueche",
+    "sphere",
+    "step_ellipsoid",
+    "sum_of_different_powers",
+    "weierstrass",
 ]
