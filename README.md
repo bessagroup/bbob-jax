@@ -2,6 +2,7 @@
 
 | [**GitHub**](https://github.com/mpvanderschelling/bbob-jax)
 | [**PyPi**](https://pypi.org/project/bbob-jax/)
+| [**Documentation**](https://bbob-jax.readthedocs.io/)
 |
 
 JAX implementation of the BBOB Benchmark functions for black-box optimization, based on the original definitions by Finck et al. (2009) [^1].
