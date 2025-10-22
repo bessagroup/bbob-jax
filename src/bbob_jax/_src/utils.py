@@ -16,10 +16,12 @@ def xopt(key: PRNGKeyArray, ndim: int) -> jax.Array:
 
 def tosz_func(x):
     def transform(xi):
-        c1, c2 = 10., 7.9
+        c1, c2 = 10.0, 7.9
         x_sign = jnp.where(xi > 0, 1.0, jnp.where(xi < 0, -1.0, 0.0))
         x_star = jnp.log(jnp.abs(xi))
-        return x_sign * jnp.exp(x_star + 0.049 * (jnp.sin(c1 * x_star) + jnp.sin(c2 * x_star)))
+        return x_sign * jnp.exp(
+            x_star + 0.049 * (jnp.sin(c1 * x_star) + jnp.sin(c2 * x_star))
+        )
 
     x = jnp.array(x).ravel()
     transformed_x = jnp.where((x == x[0]) | (x == x[-1]), transform(x), x)
@@ -51,10 +53,7 @@ def rotation_matrix(dim: int, key: jax.Array) -> jax.Array:
 
 
 def penalty(x: jax.Array) -> jax.Array:
-    return jnp.sum(
-        jnp.power(jnp.maximum(jnp.abs(x) - 5.0, 0.0), 2),
-        axis=-1
-    )
+    return jnp.sum(jnp.power(jnp.maximum(jnp.abs(x) - 5.0, 0.0), 2), axis=-1)
 
 
 def bernoulli_vector(dim: int, key: jax.Array) -> jax.Array:

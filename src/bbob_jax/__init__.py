@@ -16,16 +16,16 @@ from bbob_jax._src.registry import registry, registry_original
 
 #                                                        Authorship and Credits
 # =============================================================================
-__author__ = 'Martin van der Schelling (m.p.vanderschelling@tudelft.nl)'
-__credits__ = ['Martin van der Schelling']
-__status__ = 'Stable'
+__author__ = "Martin van der Schelling (m.p.vanderschelling@tudelft.nl)"
+__credits__ = ["Martin van der Schelling"]
+__status__ = "Stable"
 #
 # =============================================================================
 
 
 __all__ = [
-    'plot_3d',
-    'registry',
-    'registry_original',
-    'bbob',
+    "plot_3d",
+    "registry",
+    "registry_original",
+    "bbob",
 ]

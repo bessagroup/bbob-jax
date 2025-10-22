@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from functools import partial
-from typing import Callable, Optional
+from typing import Optional
 
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
@@ -26,7 +27,7 @@ def plot_3d(
     # Create a figure and axis if none provided
     if ax is None:
         fig = plt.figure(figsize=(7, 5))
-        ax = fig.add_subplot(111, projection='3d')
+        ax = fig.add_subplot(111, projection="3d")
     else:
         fig = ax.get_figure()
 
