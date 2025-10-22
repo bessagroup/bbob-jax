@@ -56,11 +56,6 @@ tests = [
     { name = "pytest" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "matplotlib" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "jax" },
@@ -76,9 +71,6 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'tests'" },
 ]
 provides-extras = ["tests", "docs"]
-
-[package.metadata.requires-dev]
-dev = [{ name = "matplotlib", specifier = ">=3.10.7" }]
 
 [[package]]
 name = "certifi"
