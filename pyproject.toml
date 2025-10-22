@@ -6,11 +6,20 @@ readme = "README.md"
 authors = [
     {name = "M.P. van der Schelling", email = "m.p.vanderschelling@tudelft.nl"}
 ]
-maintainers = [
-    {name = "M.P. van der Schelling", email = "m.p.vanderschelling@tudelft.nl"}
-]
-classifiers = [
+urls = {repository = "https://github.com/bessagroup/bbob-jax"}
+keywords = ["jax", "bbob", "benchmarking", "black-box", "optimization"]
 
+classifiers = [
+  "License :: OSI Approved :: BSD License",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Information Technology",
+  "Intended Audience :: Science/Research",
+  "Natural Language :: English",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Topic :: Scientific/Engineering :: Mathematics"
 ]
 
 license = {text = "BSD-3-Clause"}
@@ -50,7 +59,6 @@ exclude = [
     "__pycache__",
     "dist",
 	"*.egg",
-	"docs/source",
 	"tests",
 	".git",
 	"notebooks",
