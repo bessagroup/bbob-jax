@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    environment: pypi
     steps:
       - name: Release
         uses: patrick-kidger/action_update_python_project@v8
