@@ -1,13 +1,12 @@
-<p align="center">
-  <a href=""><img alt="logo" src="https://avatars.githubusercontent.com/u/64279108?s=200&v=4" width="30%"></a>
-</p>
-
 # BBOB Benchmark set for Jax
 
 | [**GitHub**](https://github.com/mpvanderschelling/bbob-jax)
+| [**PyPi**](https://pypi.org/project/bbob-jax/)
 |
 
-BBOB Benchmark function implemented in JAX
+JAX implementation of the BBOB Benchmark functions for black-box optimization, based on the original definitions by Finck et al. (2009) [^1].
+
+[^1]: Finck, S., Hansen, N., Ros, R., and Auger, A. (2009), [Real-parameter black-box optimization benchmarking 2009: Noiseless functions definitions](https://inria.hal.science/inria-00362633v2/document), INRIA. 
 
 **First publication:** October 17, 2025
 
@@ -15,7 +14,7 @@ BBOB Benchmark function implemented in JAX
 
 ## Summary
 
-<!-- Write here a longer description of the package, what it does, and why it is useful. -->
+This repository providess the original BBOB 24 noise-free, real-parameter, single-objective benchmark functions reimplemented in JAX. Originally written in C, these functions have been translated to JAX to enable automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance — making them ideal for research in optimization, machine learning, and evolutionary algorithms.
 
 ## Statement of need
 
@@ -38,7 +37,11 @@ BBOB Benchmark function implemented in JAX
 
 ## Getting started
 
-<!-- Write here how users should get started with this package -->
+To install the package, use pip:
+
+```bash
+pip install bbob-jax
+```
 
 ## Community Support
 
