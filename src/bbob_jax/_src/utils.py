@@ -15,17 +15,20 @@ def xopt(key: PRNGKeyArray, ndim: int) -> jax.Array:
 
 
 def tosz_func(x):
-    def transform(xi):
-        c1, c2 = 10.0, 7.9
-        x_sign = jnp.where(xi > 0, 1.0, jnp.where(xi < 0, -1.0, 0.0))
-        x_star = jnp.log(jnp.abs(xi))
-        return x_sign * jnp.exp(
-            x_star + 0.049 * (jnp.sin(c1 * x_star) + jnp.sin(c2 * x_star))
-        )
+    c1, c2 = 10.0, 7.9
+    eps = 1e-12  # avoid log(0)
 
-    x = jnp.array(x).ravel()
-    transformed_x = jnp.where((x == x[0]) | (x == x[-1]), transform(x), x)
-    return transformed_x
+    x = jnp.asarray(x)
+    abs_x = jnp.maximum(jnp.abs(x), eps)
+    x_sign = jnp.sign(x)
+    x_star = jnp.log(abs_x)
+    transformed = x_sign * jnp.exp(
+        x_star + 0.049 * (jnp.sin(c1 * x_star) + jnp.sin(c2 * x_star))
+    )
+
+    # same “special treatment” as original, but now applied elementwise
+    mask = (x == x[0]) | (x == x[-1])
+    return jnp.where(mask, transformed, x)
 
 
 def tasy_func(x: jax.Array, beta=0.5) -> jax.Array:

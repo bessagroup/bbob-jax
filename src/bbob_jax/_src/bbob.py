@@ -62,17 +62,18 @@ def skew_rastrigin_bueche(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array):
     d = jnp.arange(ndim, dtype=x.dtype)
     s = 10 ** (0.5 * (d - 1) / (ndim - 1))
     odd_indices = jnp.arange(0, ndim, 2)
-    z = s[None, :] * tosz_func(x - x_opt)
+
+    z = s * tosz_func(x - x_opt)
 
     # Modify odd indices
     z_odd = jnp.where(
-        z[:, odd_indices] > 0, z[:, odd_indices] * 10, z[:, odd_indices]
+        z[odd_indices] > 0, z[odd_indices] * 10, z[odd_indices]
     )
-    z = z.at[:, odd_indices].set(z_odd)
+    z = z.at[odd_indices].set(z_odd)
 
     # Compute terms
-    first_part = 10 * (ndim - jnp.sum(jnp.cos(2.0 * jnp.pi * z), axis=-1))
-    second_part = jnp.sum(z * z, axis=-1)
+    first_part = 10 * (ndim - jnp.sum(jnp.cos(2.0 * jnp.pi * z)))
+    second_part = jnp.sum(z * z)
 
     y = first_part + second_part
     return y
@@ -108,7 +109,7 @@ def attractive_sector(
 
     term = jnp.sum((s * z) ** 2)
 
-    result = jnp.power(tosz_func(term), 0.9)
+    result = jnp.power(tosz_func(jnp.array([term]))[0], 0.9)
 
     return result
 
@@ -406,7 +407,7 @@ def gallagher_101_peaks(
     inside_max = w * jnp.exp(in_bracket)
     f = 10.0 - jnp.max(inside_max)
 
-    f_tosz = tosz_func(f)
+    f_tosz = tosz_func(jnp.array([f]))[0]
 
     result = jnp.power(f_tosz, 2) + penalty(x)
 
@@ -451,7 +452,7 @@ def gallagher_21_peaks(
     inside_max = w * jnp.exp(in_bracket)
     f = 10.0 - jnp.max(inside_max)
 
-    f_tosz = tosz_func(f)
+    f_tosz = tosz_func(jnp.array([f]))[0]
 
     result = jnp.power(f_tosz, 2) + penalty(x)
 
