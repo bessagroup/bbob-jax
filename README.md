@@ -5,6 +5,8 @@
 | [**Documentation**](https://bbob-jax.readthedocs.io/)
 |
 
+**WARNING: THIS REPOSITORY IS STILL UNDER ACTIVE DEVELOPMENT. THE API AND FUNCTIONALITY MAY CHANGE IN FUTURE RELEASES.**
+
 JAX implementation of the BBOB Benchmark functions for black-box optimization, based on the original definitions by Finck et al. (2009) [^1].
 
 [^1]: Finck, S., Hansen, N., Ros, R., and Auger, A. (2009), [Real-parameter black-box optimization benchmarking 2009: Noiseless functions definitions](https://inria.hal.science/inria-00362633v2/document), INRIA. 
