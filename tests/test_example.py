@@ -34,3 +34,21 @@ def test_function_output(name, fn, dim):
     assert jnp.ndim(y) == 0, (
         f"Function {name} did not return a scalar output: {y.shape}"
     )
+
+
+@pytest.mark.parametrize("name,fn", all_functions)
+@pytest.mark.parametrize("dim", dimensions)
+def test_function_output_jit(name, fn, dim):
+    """Test that each registered function runs correctly for given dimensionalities."""
+    key = jr.key(0)
+    x = jr.uniform(key, shape=(dim,), minval=-5.0, maxval=5.0)
+
+    try:
+        y = jax.jit(fn)(x, key=key)
+    except Exception as e:
+        pytest.fail(f"Function {name} raised an exception: {e}")
+
+    assert jnp.isfinite(y), f"Function {name} returned non-finite value: {y}"
+    assert jnp.ndim(y) == 0, (
+        f"Function {name} did not return a scalar output: {y.shape}"
+    )
