@@ -56,6 +56,11 @@ tests = [
     { name = "pytest" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "coco-experiment" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "jax" },
@@ -71,6 +76,9 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'tests'" },
 ]
 provides-extras = ["tests", "docs"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "coco-experiment", specifier = ">=2.8.1" }]
 
 [[package]]
 name = "certifi"
@@ -180,6 +188,30 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/46/61/de6cd827efad202d7057d93e0fed9294b96952e188f7384832791c7b2254/click-8.3.0.tar.gz", hash = "sha256:e7b8232224eba16f4ebe410c25ced9f7875cb5f3263ffc93cc3e8da705e229c4", size = 276943, upload-time = "2025-09-18T17:32:23.696Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/db/d3/9dcc0f5797f070ec8edf30fbadfb200e71d9db6b84d211e3b2085a7589a0/click-8.3.0-py3-none-any.whl", hash = "sha256:9b9f285302c6e3064f4330c05f05b81945b2a39544279343e6e7c5f27a9baddc", size = 107295, upload-time = "2025-09-18T17:32:22.42Z" },
+]
+
+[[package]]
+name = "coco-experiment"
+version = "2.8.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.3.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/47/ea/e13ee69d267ba497c688d34b749e981d9524e3b6f19ce59093920832aba6/coco_experiment-2.8.1.tar.gz", hash = "sha256:8c744a04a9e1b13e0091d225d0d185b5c998c5a4e872e55130fa64b8d0f0541e", size = 3918936, upload-time = "2025-04-04T11:22:59.123Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/f0/a1c76661b1e6b40e5c6d5f279d4a763299d90188a744199f375b8b0c02fd/coco_experiment-2.8.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:5655a3ee98da5dc1565c7e469b9ff9d9add6f2483262b343641ac58f629ec062", size = 579735, upload-time = "2025-04-04T11:22:30.686Z" },
+    { url = "https://files.pythonhosted.org/packages/de/f8/bdf624d119dd16536a6b38cc3ee4303d341acd844ad99438d813f555fff8/coco_experiment-2.8.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:bac3fef78eccfe48a4493b866a8cb5b00c8cf60cdb06bbe9dcf60661a7f9a604", size = 782705, upload-time = "2025-04-04T11:22:32.531Z" },
+    { url = "https://files.pythonhosted.org/packages/36/5c/63dd7f740ff407dd9347121551f936dc68c6862de286265291530f6bfdfd/coco_experiment-2.8.1-cp310-cp310-musllinux_1_1_x86_64.whl", hash = "sha256:8a0d263cbdc080e477d0456d2548c311d598cef3793cd50fbf0e34a7b8d14685", size = 791760, upload-time = "2025-04-04T11:22:33.776Z" },
+    { url = "https://files.pythonhosted.org/packages/7c/6f/b5dd83dd3b19f81f62d4285194fee63ac104601454ccc59ddc0b8b59aa8d/coco_experiment-2.8.1-cp310-cp310-win_amd64.whl", hash = "sha256:8d0245c831c70093af5649ed18f82edb272c20f9b287c10b032c3c5cae950431", size = 431885, upload-time = "2025-04-04T11:22:35.607Z" },
+    { url = "https://files.pythonhosted.org/packages/db/a6/caae465e582a94076522d0c49efb9e469faaae503f3eb31b9723db5ac279/coco_experiment-2.8.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:24aef736cbf0e87e70723724328adc9fa0581ab67f0689b33671b82bae13fec5", size = 579693, upload-time = "2025-04-04T11:22:36.948Z" },
+    { url = "https://files.pythonhosted.org/packages/fc/d5/626978fe307b9721b969568c8d570d7c4bbce7f9dfc76e21671fb1594fcb/coco_experiment-2.8.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:f52dcfa706a4e4bc34af741ae4e2cc6982d3f1a4684cf8c5c997fbbc62dcc391", size = 782963, upload-time = "2025-04-04T11:22:38.615Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/46/a652e74d9ca1614fbb8caa26677ba5a76b28e3356e479c5e9ba0caf1b7b8/coco_experiment-2.8.1-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:83b23ecef58c2bd1b001c94c00548fccc5cfa8be11d9d12bce87087058012291", size = 791789, upload-time = "2025-04-04T11:22:40.284Z" },
+    { url = "https://files.pythonhosted.org/packages/0f/cc/5a94c7d4b0b5dc1f5876b35e33f5aa78a81a6287f02c26f4e689f5e25b3d/coco_experiment-2.8.1-cp311-cp311-win_amd64.whl", hash = "sha256:953d512492f91247c26c7fec2c4f1af9c54c9d6455b75d3d9f8b753d470686ae", size = 432273, upload-time = "2025-04-04T11:22:41.916Z" },
+    { url = "https://files.pythonhosted.org/packages/7a/64/12b2b621a4d44c06c6cb377be99d5e6920c2d16312c6b9ff4586c2089508/coco_experiment-2.8.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:588e9879989f9071abc7a21fcf6a755ad5c428d2087873b444961fbd741ccc93", size = 581589, upload-time = "2025-04-04T11:22:43.193Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/72/ee718ac81c6cd3d6f0120a8363d75a51b39d1c860d4d5ce7ff7cc5bc4f50/coco_experiment-2.8.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:0f3a6de7b08da9a497e906f768fdce445e83f62b857d93a1eb04a80dd2508d9a", size = 773198, upload-time = "2025-04-04T11:22:44.557Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/1e/e050ae4bcee5b78da5a25380b277718a1f7383306ae202466b55e4750a85/coco_experiment-2.8.1-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:1fe40913508562213f8f91015fa7df92c1e11a635cf7992f586cad31fe557818", size = 782302, upload-time = "2025-04-04T11:22:45.881Z" },
+    { url = "https://files.pythonhosted.org/packages/40/1d/df59c7ebf9f87368bf490792e15f2039da4f8b9421de7732795b73553642/coco_experiment-2.8.1-cp312-cp312-win_amd64.whl", hash = "sha256:b110f9751410d71854b4e9dcf606f3f98f025cb87fae2fbe56051d6d0b1b3860", size = 431575, upload-time = "2025-04-04T11:22:47.385Z" },
 ]
 
 [[package]]
