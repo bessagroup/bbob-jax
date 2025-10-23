@@ -37,10 +37,10 @@ def ellipsoid_seperable(
     x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
 ) -> jax.Array:
     ndim = x.shape[-1]
-    idx = jnp.arange(ndim, dtype=x.dtype)
+    i = jnp.arange(1, ndim+1, dtype=x.dtype)
+    w = jnp.power(10.0, 6.0 * (i - 1) / (ndim - 1))
     z = tosz_func(x - x_opt)
-    weights = 10.0 ** (6.0 * idx / (ndim - 1))
-    return jnp.sum(weights * z**2)
+    return jnp.sum(w * z**2)
 
 
 @register_function("rastrigin_seperable")
@@ -59,9 +59,9 @@ def rastrigin_seperable(
 @register_function("skew_rastrigin_bueche")
 def skew_rastrigin_bueche(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array):
     ndim = x.shape[-1]
-    d = jnp.arange(ndim, dtype=x.dtype)
-    s = 10 ** (0.5 * (d - 1) / (ndim - 1))
-    odd_indices = jnp.arange(0, ndim, 2)
+    i = jnp.arange(1, ndim+1, dtype=x.dtype)
+    s = jnp.power(10, 0.5 * ((i - 1) / (ndim - 1)))
+    odd_indices = jnp.arange(1, ndim+1, 2)
 
     z = s * tosz_func(x - x_opt)
 
@@ -75,7 +75,7 @@ def skew_rastrigin_bueche(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array):
     first_part = 10 * (ndim - jnp.sum(jnp.cos(2.0 * jnp.pi * z)))
     second_part = jnp.sum(z * z)
 
-    y = first_part + second_part
+    y = first_part + second_part + 100 * penalty(x)
     return y
 
 
@@ -85,9 +85,10 @@ def linear_slope(
 ) -> jax.Array:
     ndim = x.shape[-1]
     x_opt = 5 * bernoulli_vector(ndim, key)
-    s = jnp.sign(x_opt) * jnp.power(10.0, jnp.arange(1, ndim + 1) / (ndim - 1))
+    i = jnp.arange(1, ndim + 1, dtype=x.dtype)
+    s = jnp.sign(x_opt) * jnp.power(10.0, (i - 1) / (ndim - 1))
 
-    cond = x * x_opt < 25.0
+    cond = x_opt * x < 25.0
     z = jnp.where(cond, x, x_opt)
 
     result = jnp.sum(5.0 * jnp.abs(s) - s * z)
@@ -100,12 +101,12 @@ def attractive_sector(
 ) -> jax.Array:
     key1, key2 = jr.split(key)
     ndim = x.shape[-1]
-    cond = (x_opt * x) > 0.0
-    s = jnp.where(cond, 100.0, 1.0)
     R = rotation_matrix(ndim, key1)
     Q = rotation_matrix(ndim, key2)
     lamb = lambda_func(ndim, alpha=10.0)
     z = Q @ lamb @ R @ (x - x_opt)
+    cond = (z * x_opt) > 0.0
+    s = jnp.where(cond, 100.0, 1.0)
 
     term = jnp.sum((s * z) ** 2)
 
@@ -120,11 +121,12 @@ def step_ellipsoid(
 ) -> jax.Array:
     key1, key2 = jr.split(key)
     ndim = x.shape[-1]
+    i = jnp.arange(1, ndim+1, dtype=x.dtype)
     lamb = lambda_func(ndim, alpha=10.0)
     R = rotation_matrix(ndim, key1)
     Q = rotation_matrix(ndim, key2)
     mult = jnp.power(
-        10.0, 2 * jnp.arange(0, ndim, dtype=jnp.float32) / (ndim - 1)
+        10.0, 2 * ((i - 1) / (ndim - 1))
     )
 
     # Compute ẑ
@@ -140,9 +142,9 @@ def step_ellipsoid(
 
     # Compute final f
     result = 0.1 * jnp.maximum(
-        jnp.abs(z_hat[0]) / 10**4, jnp.sum(mult * z * z)
+        jnp.abs(z_hat[0]) / 1e4, jnp.sum(mult * z**2)
     )
-    return result
+    return result + penalty(x)
 
 
 @register_function("rosenbrock")
@@ -215,10 +217,8 @@ def discuss(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
 def bent_cigar(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
     R = rotation_matrix(ndim, key)
-    z = tasy_func(R @ (x - x_opt), beta=0.5) @ R
-    first = jnp.power(z[..., 0], 2)
-    second = 1e6 * jnp.sum(jnp.power(z[..., 1:], 2), axis=-1)
-    return first + second
+    z = R @ tasy_func(R @ (x - x_opt), beta=0.5)
+    return z[0]**2 + 1e6 * jnp.sum(z[1:]**2)
 
 
 @register_function("sharp_ridge")
@@ -231,9 +231,7 @@ def sharp_ridge(
     Q = rotation_matrix(ndim, key2)
     lamb = lambda_func(ndim, alpha=10.0)
     z = Q @ lamb @ R @ (x - x_opt)
-    first = jnp.power(z[..., 0], 2)
-    second = 100.0 * jnp.sqrt(jnp.sum(jnp.power(z[..., 1:], 2), axis=-1))
-    return first + second
+    return z[0]**2 + 100.0 * jnp.sqrt(jnp.sum(z[1:]**2))
 
 
 @register_function("sum_of_different_powers")
@@ -270,20 +268,21 @@ def weierstrass(
     lamb = lambda_func(ndim, alpha=0.01)
     z = R @ lamb @ Q @ tosz_func(R @ (x - x_opt))
 
-    k = jnp.arange(0, 11)
-    ak = 0.5**k
+    k = jnp.arange(0, 12, dtype=x.dtype)
     bk = 3.0**k
 
-    first_term = jnp.sum(
-        ak[:, None] * jnp.cos(2 * jnp.pi * bk[:, None] * (z + 0.5)), axis=0
-    )
-    correction = jnp.sum(ak * jnp.cos(jnp.pi * bk))
+    f0 = jnp.sum((1 / 2**k) * jnp.cos(2 * jnp.pi * bk * 0.5))
 
-    result = 10.0 * jnp.power(
-        1.0 / ndim * jnp.sum(first_term) - correction, 3
-    ) + (10.0 / ndim) * penalty(x)
+    def inner(z):
+        return 1 / 2**k * jnp.cos(2 * jnp.pi * bk * (z + 0.5)) - f0
 
-    return result
+    y = jax.vmap(inner)(z)
+    sum1 = jnp.sum(y)
+
+    first_term = 10.0 * jnp.power((1.0 / ndim) * jnp.sum(sum1), 3)
+    pen = (10.0 / ndim) * penalty(x)
+
+    return first_term + pen
 
 
 @register_function("schaffer_f7_condition_10")
@@ -295,11 +294,11 @@ def schaffer_f7_condition_10(
     R = rotation_matrix(ndim, key1)
     Q = rotation_matrix(ndim, key2)
     lamb = lambda_func(ndim, alpha=10.0)
-    z = lamb @ Q @ tasy_func(R @ (x - x_opt))
+    z = lamb @ Q @ tasy_func(R @ (x - x_opt), beta=0.5)
 
-    s = jnp.sqrt(z[:-1] ** 2 + z[:1] ** 2)
+    s = jnp.sqrt(z[:-1] ** 2 + z[1:] ** 2)
 
-    term1 = (1 / ndim - 1) * jnp.sum(
+    term1 = (1 / (ndim - 1)) * jnp.sum(
         jnp.sqrt(s)
         + jnp.sqrt(s) * jnp.power(jnp.sin(50.0 * jnp.power(s, 0.2)), 2)
     )
@@ -317,11 +316,11 @@ def schaffer_f7_condition_1000(
     R = rotation_matrix(ndim, key1)
     Q = rotation_matrix(ndim, key2)
     lamb = lambda_func(ndim, alpha=1000.0)
-    z = lamb @ Q @ tasy_func(R @ (x - x_opt))
+    z = lamb @ Q @ tasy_func(R @ (x - x_opt), beta=0.5)
 
-    s = jnp.sqrt(z[:-1] ** 2 + z[:1] ** 2)
+    s = jnp.sqrt(z[:-1] ** 2 + z[1:] ** 2)
 
-    term1 = (1 / ndim - 1) * jnp.sum(
+    term1 = (1 / (ndim - 1)) * jnp.sum(
         jnp.sqrt(s)
         + jnp.sqrt(s) * jnp.power(jnp.sin(50.0 * jnp.power(s, 0.2)), 2)
     )
@@ -374,38 +373,36 @@ def schwefel_xsinx(
 def gallagher_101_peaks(
     x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
 ) -> jax.Array:
-    key1, key2, key3, key4 = jr.split(key, 4)
+    key1, key2, key3 = jr.split(key, 3)
+
     ndim = x.shape[-1]
     R = rotation_matrix(ndim, key1)
+    i = jnp.arange(1, 102, dtype=jnp.float32)
+    j = jnp.arange(0, 100, dtype=jnp.float32)
 
-    w = 1.1 + 8.0 * (jnp.arange(1, 102, dtype=jnp.float32) - 2) / 99
+    w = 1.1 + 8.0 * ((i - 2) / 99)
     w = w.at[0].set(10.0)
 
-    a = jnp.power(1000, 2.0 * (jnp.arange(100, dtype=jnp.float32) / 99.0))
+    a = jnp.power(1000, 2.0 * (j / 99.0))
     alpha = jr.permutation(key2, a)
-    alpha = alpha.at[0].set(1000.0)
+    alpha = jnp.concatenate([jnp.array([1000.0]), alpha])
+
+    y = jr.uniform(key3, shape=(*i.shape, ndim), minval=-5.0, maxval=5.0)
+    x_opt = jr.uniform(key, shape=(ndim,), minval=-4.0, maxval=4.0)
+    y = y.at[0].set(x_opt)
 
     C = jax.vmap(lambda_func, in_axes=(None, 0))(ndim, alpha)
 
     C /= jnp.power(alpha, 0.25)[:, None, None]
 
-    y = jr.uniform(key3, shape=(101, ndim), minval=-5.0, maxval=5.0)
-    y1 = jr.uniform(key4, shape=(ndim,), minval=-4.0, maxval=4.0)
-    y = y.at[0].set(y1)
-
     diff = x[None, :] - y
-    diff_rot = diff @ R.T
 
-    def apply_C(C_i, d_i):
-        return (d_i @ C_i) @ R.T
+    def apply_C(C_i, d_i, w_i):
+        return w_i * jnp.exp(-1.0 / (2.0 * ndim) * (d_i @ C_i) @ R @ d_i.T)
 
-    diff_scaled = jax.vmap(apply_C)(C, diff_rot[1:])
-    diff_scaled = jnp.vstack([diff_scaled[0:1], diff_scaled])
+    inside_max = jax.vmap(apply_C)(C, diff, w)
 
-    in_bracket = -1.0 / (2.0 * ndim) * jnp.sum(diff_scaled * diff, axis=-1)
-
-    inside_max = w * jnp.exp(in_bracket)
-    f = 10.0 - jnp.max(inside_max)
+    f = 10.0 - jnp.max(inside_max, axis=0)
 
     f_tosz = tosz_func(jnp.array([f]))[0]
 
@@ -418,39 +415,36 @@ def gallagher_101_peaks(
 def gallagher_21_peaks(
     x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
 ) -> jax.Array:
-    key1, key2, key3, key4 = jr.split(key, 4)
+    key1, key2, key3 = jr.split(key, 3)
 
     ndim = x.shape[-1]
     R = rotation_matrix(ndim, key1)
+    i = jnp.arange(1, 22, dtype=jnp.float32)
+    j = jnp.arange(0, 20, dtype=jnp.float32)
 
-    w = 1.1 + 8.0 * (jnp.arange(1, 22, dtype=jnp.float32) - 2) / 19
+    w = 1.1 + 8.0 * ((i - 2) / 19)
     w = w.at[0].set(10.0)
 
-    a = jnp.power(1000, 2.0 * (jnp.arange(20, dtype=jnp.float32) / 19.0))
+    a = jnp.power(1000, 2.0 * (j / 19.0))
     alpha = jr.permutation(key2, a)
-    alpha = alpha.at[0].set(1000.0**2)
+    alpha = jnp.concatenate([jnp.array([1000.0**2]), alpha])
+
+    y = jr.uniform(key3, shape=(*i.shape, ndim), minval=-4.9, maxval=4.9)
+    x_opt = jr.uniform(key, shape=(ndim,), minval=-3.92, maxval=3.92)
+    y = y.at[0].set(x_opt)
 
     C = jax.vmap(lambda_func, in_axes=(None, 0))(ndim, alpha)
 
     C /= jnp.power(alpha, 0.25)[:, None, None]
 
-    y = jr.uniform(key3, shape=(21, ndim), minval=-4.9, maxval=4.9)
-    y1 = jr.uniform(key4, shape=(ndim,), minval=-3.92, maxval=3.92)
-    y = y.at[0].set(y1)
-
     diff = x[None, :] - y
-    diff_rot = diff @ R.T
 
-    def apply_C(C_i, d_i):
-        return (d_i @ C_i) @ R.T
+    def apply_C(C_i, d_i, w_i):
+        return w_i * jnp.exp(-(1.0 / (2.0 * ndim)) * d_i.T @ C_i @ R @ d_i)
 
-    diff_scaled = jax.vmap(apply_C)(C, diff_rot[1:])
-    diff_scaled = jnp.vstack([diff_scaled[0:1], diff_scaled])
+    inside_max = jax.vmap(apply_C)(C, diff, w)
 
-    in_bracket = -1.0 / (2.0 * ndim) * jnp.sum(diff_scaled * diff, axis=-1)
-
-    inside_max = w * jnp.exp(in_bracket)
-    f = 10.0 - jnp.max(inside_max)
+    f = 10.0 - jnp.max(inside_max, axis=0)
 
     f_tosz = tosz_func(jnp.array([f]))[0]
 
@@ -494,6 +488,8 @@ def katsuura(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
 @register_function("lunacek_bi_rastrigin")
 def lunacek_bi_rastrigin(
     x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
+
+
 ) -> jax.Array:
     ndim = x.shape[-1]
     key1, key2, key3 = jr.split(key, 3)

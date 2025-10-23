@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 import jax.random as jr
@@ -77,10 +79,11 @@ def test_function_vmap(name, fn, dim, seed):
 @pytest.mark.parametrize("seed", [1, 2])
 def test_function_grad(name, fn, dim, seed):
     key = jr.key(seed)
-    x = jr.uniform(key, shape=(dim,), minval=-5.0, maxval=5.0)
+    key_x, key_fn = jr.split(key)
+    x = jr.uniform(key_x, shape=(300, dim), minval=-5.0, maxval=5.0)
     try:
-        grad_fn = jax.grad(fn)
-        grad_value = grad_fn(x, key=key)
+        grad_fn = jax.grad(partial(fn, key=key_fn))
+        grad_value = jax.vmap(grad_fn)(x)
     except Exception as e:
         pytest.fail(
             f"Function {name} raised an exception during jax.grad: {e}")
