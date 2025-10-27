@@ -398,7 +398,8 @@ def gallagher_101_peaks(
     diff = x[None, :] - y
 
     def apply_C(C_i, d_i, w_i):
-        return w_i * jnp.exp(-1.0 / (2.0 * ndim) * (d_i @ C_i) @ R @ d_i.T)
+        val = -(1.0 / (2.0 * ndim)) * d_i.T @ (R.T @ C_i @ R) @ d_i
+        return w_i * jnp.exp(val)
 
     inside_max = jax.vmap(apply_C)(C, diff, w)
 
@@ -440,7 +441,8 @@ def gallagher_21_peaks(
     diff = x[None, :] - y
 
     def apply_C(C_i, d_i, w_i):
-        return w_i * jnp.exp(-(1.0 / (2.0 * ndim)) * d_i.T @ C_i @ R @ d_i)
+        val = -(1.0 / (2.0 * ndim)) * d_i.T @ (R.T @ C_i @ R) @ d_i
+        return w_i * jnp.exp(val)
 
     inside_max = jax.vmap(apply_C)(C, diff, w)
 
