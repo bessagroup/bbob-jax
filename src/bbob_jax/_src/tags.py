@@ -1,0 +1,28 @@
+from collections import defaultdict
+
+function_characteristics = defaultdict(dict, {
+    "sphere": {"separable": True, "unimodal": True},
+    "ellipsoid_seperable": {"separable": True, "unimodal": True},
+    "rastrigin_seperable": {"separable": True, "unimodal": True},
+    "skew_rastrigin_bueche": {"separable": True, "unimodal": True},
+    "linear_slope": {"separable": True, "unimodal": True},
+    "attractive_sector": {"separable": False, "unimodal": True},
+    "step_ellipsoid": {"separable": False, "unimodal": True},
+    "rosenbrock": {"separable": False, "unimodal": True},
+    "rosenbrock_rotated": {"separable": False, "unimodal": True},
+    "ellipsoid": {"separable": False, "unimodal": True},
+    "discuss": {"separable": False, "unimodal": True},
+    "bent_cigar": {"separable": False, "unimodal": True},
+    "sharp_ridge": {"separable": False, "unimodal": True},
+    "sum_of_different_powers": {"separable": False, "unimodal": True},
+    "rastrigin": {"separable": False, "unimodal": False},
+    "weierstrass": {"separable": False, "unimodal": False},
+    "schaffer_f7_condition_10": {"separable": False, "unimodal": False},
+    "schaffer_f7_condition_1000": {"separable": False, "unimodal": False},
+    "griewank_rosenbrock_f8f2": {"separable": False, "unimodal": False},
+    "schwefel_xsinx": {"separable": False, "unimodal": False},
+    "gallagher_101_peaks": {"separable": False, "unimodal": False},
+    "gallagher_21_peaks": {"separable": False, "unimodal": False},
+    "katsuura": {"separable": False, "unimodal": False},
+    "lunacek_bi_rastrigin": {"separable": False, "unimodal": False},
+})

@@ -32,6 +32,7 @@ from bbob_jax._src.bbob import (
     weierstrass,
 )
 from bbob_jax._src.registry import registry, registry_original
+from bbob_jax._src.tags import function_characteristics
 
 #                                                        Authorship and Credits
 # =============================================================================
@@ -45,6 +46,7 @@ __status__ = "Stable"
 __all__ = [
     "registry",
     "registry_original",
+    "function_characteristics",
     "bbob",
     "attractive_sector",
     "bent_cigar",
