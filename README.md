@@ -54,7 +54,7 @@ pip install bbob-jax
 
 ## Community Support
 
-If you find any **issues, bugs or problems** with this package, please use the [GitHub issue tracker](https://github.com/mpvanderschelling/bbob_jax/issues) to report them.
+If you find any **issues, bugs or problems** with this package, please use the [GitHub issue tracker](https://github.com/bessagroup/bbob-jax/issues) to report them.
 
 ## License
 
@@ -62,5 +62,5 @@ Copyright (c) 2025, Martin van der Schelling
 
 All rights reserved.
 
-This project is licensed under the BSD 3-Clause License. See [LICENSE](https://github.com/mpvanderschelling/bbob_jax/blob/main/LICENSE) for the full license text.
+This project is licensed under the BSD 3-Clause License. See [LICENSE](https://github.com/bessagroup/bbob-jax/blob/main/LICENSE) for the full license text.
 
