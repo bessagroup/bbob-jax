@@ -3,9 +3,10 @@ from functools import wraps
 
 import jax
 import jax.numpy as jnp
+import jax.random as jr
 from jaxtyping import PRNGKeyArray
 
-from bbob_jax._src.utils import fopt, xopt
+from bbob_jax._src.utils import fopt, rotation_matrix, xopt
 
 BBOBFn = Callable[[jax.Array, PRNGKeyArray], jax.Array]
 
@@ -17,18 +18,21 @@ registry: dict[str, BBOBFn] = {}
 def register_function(format: str) -> Callable[[BBOBFn], BBOBFn]:
     def decorator(fn: BBOBFn) -> BBOBFn:
         @wraps(fn)
-        def wrapper_det(
-            x: jax.Array, *args, key: PRNGKeyArray, **kwargs
-        ) -> jax.Array:
-            x_opt = jnp.zeros(shape=x.shape[-1])
-            return fn(x, *args, key=key, x_opt=x_opt, **kwargs)
+        def wrapper_det(x: jax.Array, *args, **kwargs) -> jax.Array:
+            ndim = x.shape[-1]
+            x_opt = jnp.zeros(ndim)
+            eye = jnp.eye(ndim)
+            return fn(x, x_opt=x_opt, R=eye, Q=eye)
 
         @wraps(fn)
-        def wrapper_rand(
-            x: jax.Array, *args, key: PRNGKeyArray, **kwargs
-        ) -> jax.Array:
-            x_opt = xopt(key, ndim=x.shape[-1])
-            return fn(x, *args, key=key, x_opt=x_opt, **kwargs) + fopt(key)
+        def wrapper_rand(x: jax.Array, key: PRNGKeyArray, *args, **kwargs
+                         ) -> jax.Array:
+            ndim = x.shape[-1]
+            key1, key2 = jr.split(key)
+            x_opt = xopt(key, ndim)
+            R = rotation_matrix(ndim, key1)
+            Q = rotation_matrix(ndim, key2)
+            return fn(x, x_opt=x_opt, R=R, Q=Q) + fopt(key)
 
         # Register both variants
         registry_original[format] = wrapper_det

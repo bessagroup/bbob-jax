@@ -6,12 +6,17 @@ from jaxtyping import PRNGKeyArray
 
 def fopt(key: PRNGKeyArray) -> jax.Array:
     """Generate a random optimal function value f_opt."""
-    return jnp.round(jnp.clip(100.0 * jr.cauchy(key), -1000.0, 1000.0), 2)
+    return jnp.round(
+        jnp.clip(100.0 * jr.cauchy(key, shape=()), min=-1000.0, max=1000.0), 2)
 
 
 def xopt(key: PRNGKeyArray, ndim: int) -> jax.Array:
     """Generate a random optimal solution x_opt within [-4, 4]^ndim."""
-    return jr.uniform(key, shape=(ndim,), minval=-5.0, maxval=5.0)
+    return jr.uniform(
+        key,
+        shape=(ndim,),
+        minval=-4.0,
+        maxval=4.0)
 
 
 def tosz_func(x):
@@ -48,11 +53,28 @@ def lambda_func(size: int, alpha: float = 10.0) -> jax.Array:
 def rotation_matrix(dim: int, key: jax.Array) -> jax.Array:
     """Generate a random orthogonal rotation matrix."""
     R = jr.normal(key, shape=(dim, dim))
-    Q, R_ = jnp.linalg.qr(R)
-    # Ensure a right-handed coordinate system (determinant = +1)
-    d = jnp.sign(jnp.linalg.det(Q))
-    Q = Q * d
-    return Q
+
+    # QR decomposition
+    orthogonal_matrix, upper_triangular = jnp.linalg.qr(R)
+
+    # Extract diagonal and create sign correction matrix
+    diagonal = jnp.diag(upper_triangular)
+    sign_correction = jnp.diag(diagonal / jnp.abs(diagonal))
+
+    # Apply sign correction
+    rotation = orthogonal_matrix @ sign_correction
+
+    # Ensure determinant is 1 by possibly flipping first row
+    determinant = jnp.linalg.det(rotation)
+    rotation = rotation.at[0].multiply(determinant)
+
+    return rotation
+
+    # Q, R_ = jnp.linalg.qr(R)
+    # # Ensure a right-handed coordinate system (determinant = +1)
+    # d = jnp.sign(jnp.linalg.det(Q))
+    # Q = Q * d
+    # return Q
 
 
 def penalty(x: jax.Array) -> jax.Array:

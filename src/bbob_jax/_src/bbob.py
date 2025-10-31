@@ -5,7 +5,6 @@
 import jax
 import jax.numpy as jnp
 import jax.random as jr
-from jaxtyping import PRNGKeyArray
 
 # Local
 from bbob_jax._src.registry import register_function
@@ -13,7 +12,6 @@ from bbob_jax._src.utils import (
     bernoulli_vector,
     lambda_func,
     penalty,
-    rotation_matrix,
     tasy_func,
     tosz_func,
 )
@@ -27,15 +25,17 @@ __status__ = "Stable"
 
 
 @register_function("sphere")
-def sphere(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
+def sphere(
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     z = x - x_opt
-    return jnp.sum(z**2)
+    return jnp.sum(jnp.square(z))
 
 
 @register_function("ellipsoid_seperable")
 def ellipsoid_seperable(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
     i = jnp.arange(1, ndim+1, dtype=x.dtype)
     w = jnp.power(10.0, 6.0 * (i - 1) / (ndim - 1))
@@ -45,8 +45,8 @@ def ellipsoid_seperable(
 
 @register_function("rastrigin_seperable")
 def rastrigin_seperable(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
 
     alpha = lambda_func(ndim, alpha=10.0)
@@ -57,7 +57,9 @@ def rastrigin_seperable(
 
 
 @register_function("skew_rastrigin_bueche")
-def skew_rastrigin_bueche(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array):
+def skew_rastrigin_bueche(
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
     i = jnp.arange(1, ndim+1, dtype=x.dtype)
     s = jnp.power(10, 0.5 * ((i - 1) / (ndim - 1)))
@@ -81,9 +83,12 @@ def skew_rastrigin_bueche(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array):
 
 @register_function("linear_slope")
 def linear_slope(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
+    key = jr.key(0)
+    key = jr.fold_in(key, Q[0, 0])
+
     x_opt = 5 * bernoulli_vector(ndim, key)
     i = jnp.arange(1, ndim + 1, dtype=x.dtype)
     s = jnp.sign(x_opt) * jnp.power(10.0, (i - 1) / (ndim - 1))
@@ -97,12 +102,9 @@ def linear_slope(
 
 @register_function("attractive_sector")
 def attractive_sector(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
-    key1, key2 = jr.split(key)
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
-    R = rotation_matrix(ndim, key1)
-    Q = rotation_matrix(ndim, key2)
     lamb = lambda_func(ndim, alpha=10.0)
     z = Q @ lamb @ R @ (x - x_opt)
     cond = (z * x_opt) > 0.0
@@ -117,14 +119,11 @@ def attractive_sector(
 
 @register_function("step_ellipsoid")
 def step_ellipsoid(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
-    key1, key2 = jr.split(key)
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
     i = jnp.arange(1, ndim+1, dtype=x.dtype)
     lamb = lambda_func(ndim, alpha=10.0)
-    R = rotation_matrix(ndim, key1)
-    Q = rotation_matrix(ndim, key2)
     mult = jnp.power(
         10.0, 2 * ((i - 1) / (ndim - 1))
     )
@@ -148,7 +147,9 @@ def step_ellipsoid(
 
 
 @register_function("rosenbrock")
-def rosenbrock(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
+def rosenbrock(
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
     zmax = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0)
     # Shift and scale
@@ -170,11 +171,9 @@ def rosenbrock(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
 
 @register_function("rosenbrock_rotated")
 def rosenbrock_rotated(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
-    R = rotation_matrix(ndim, key)
-
     zmax = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0)
 
     z = zmax * (x @ R) + 0.5
@@ -194,9 +193,9 @@ def rosenbrock_rotated(
 
 
 @register_function("ellipsoid")
-def ellipsoid(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
+def ellipsoid(x: jax.Array, x_opt: jax.Array,
+              R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
-    R = rotation_matrix(ndim, key)
     idx = jnp.arange(ndim, dtype=x.dtype)
     z = tosz_func(x @ R)
     weights = 10.0 ** (6.0 * idx / (ndim - 1))
@@ -204,9 +203,10 @@ def ellipsoid(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
 
 
 @register_function("discuss")
-def discuss(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
-    ndim = x.shape[-1]
-    R = rotation_matrix(ndim, key)
+def discuss(
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
+    _ = x.shape[-1]
     z = tosz_func(R @ (x - x_opt))
     first = 1e6 * jnp.power(z[..., 0], 2)
     second = jnp.sum(jnp.power(z[..., 1:], 2), axis=-1)
@@ -214,21 +214,19 @@ def discuss(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
 
 
 @register_function("bent_cigar")
-def bent_cigar(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
-    ndim = x.shape[-1]
-    R = rotation_matrix(ndim, key)
+def bent_cigar(
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
+    _ = x.shape[-1]
     z = R @ tasy_func(R @ (x - x_opt), beta=0.5)
     return z[0]**2 + 1e6 * jnp.sum(z[1:]**2)
 
 
 @register_function("sharp_ridge")
 def sharp_ridge(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
-    key1, key2 = jr.split(key)
-    R = rotation_matrix(ndim, key1)
-    Q = rotation_matrix(ndim, key2)
     lamb = lambda_func(ndim, alpha=10.0)
     z = Q @ lamb @ R @ (x - x_opt)
     return z[0]**2 + 100.0 * jnp.sqrt(jnp.sum(z[1:]**2))
@@ -236,21 +234,19 @@ def sharp_ridge(
 
 @register_function("sum_of_different_powers")
 def sum_of_different_powers(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
-    R = rotation_matrix(ndim, key)
     z = R @ (x - x_opt)
     idx = jnp.arange(1, ndim + 1, dtype=x.dtype)
     return jnp.sum(jnp.abs(z) ** (2 + 4 * (idx - 1) / (ndim - 1)))
 
 
 @register_function("rastrigin")
-def rastrigin(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
+def rastrigin(
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
-    key1, key2 = jr.split(key)
-    R = rotation_matrix(ndim, key1)
-    Q = rotation_matrix(ndim, key2)
     lamb = lambda_func(ndim, alpha=10.0)
     z = R @ lamb @ Q @ tasy_func(tosz_func(R @ (x - x_opt)), beta=0.2)
 
@@ -259,12 +255,9 @@ def rastrigin(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
 
 @register_function("weierstrass")
 def weierstrass(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
-    key1, key2 = jr.split(key)
-    R = rotation_matrix(ndim, key1)
-    Q = rotation_matrix(ndim, key2)
     lamb = lambda_func(ndim, alpha=0.01)
     z = R @ lamb @ Q @ tosz_func(R @ (x - x_opt))
 
@@ -287,12 +280,9 @@ def weierstrass(
 
 @register_function("schaffer_f7_condition_10")
 def schaffer_f7_condition_10(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
-    key1, key2 = jr.split(key)
-    R = rotation_matrix(ndim, key1)
-    Q = rotation_matrix(ndim, key2)
     lamb = lambda_func(ndim, alpha=10.0)
     z = lamb @ Q @ tasy_func(R @ (x - x_opt), beta=0.5)
 
@@ -309,12 +299,9 @@ def schaffer_f7_condition_10(
 
 @register_function("schaffer_f7_condition_1000")
 def schaffer_f7_condition_1000(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
-    key1, key2 = jr.split(key)
-    R = rotation_matrix(ndim, key1)
-    Q = rotation_matrix(ndim, key2)
     lamb = lambda_func(ndim, alpha=1000.0)
     z = lamb @ Q @ tasy_func(R @ (x - x_opt), beta=0.5)
 
@@ -331,10 +318,9 @@ def schaffer_f7_condition_1000(
 
 @register_function("griewank_rosenbrock_f8f2")
 def griewank_rosenbrock_f8f2(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
-    R = rotation_matrix(ndim, key)
     z = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0) * (R @ x) + 0.5
     s = 100 * (z[:-1] ** 2 - z[1:]) ** 2 + (z[:-1] - 1) ** 2
 
@@ -343,9 +329,11 @@ def griewank_rosenbrock_f8f2(
 
 @register_function("schwefel_xsinx")
 def schwefel_xsinx(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
+    key = jr.key(0)
+    key = jr.fold_in(key, Q[0, 0])
     ones = bernoulli_vector(ndim, key)
     lamb = lambda_func(ndim, alpha=10.0)
     x_hat = 2.0 * ones * x
@@ -371,12 +359,13 @@ def schwefel_xsinx(
 
 @register_function("gallagher_101_peaks")
 def gallagher_101_peaks(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
-    key1, key2, key3 = jr.split(key, 3)
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
 
     ndim = x.shape[-1]
-    R = rotation_matrix(ndim, key1)
+    key = jr.key(0)
+    key = jr.fold_in(key, Q[0, 0])
+    key1, key2 = jr.split(key)
     i = jnp.arange(1, 102, dtype=jnp.float32)
     j = jnp.arange(0, 100, dtype=jnp.float32)
 
@@ -384,10 +373,10 @@ def gallagher_101_peaks(
     w = w.at[0].set(10.0)
 
     a = jnp.power(1000, 2.0 * (j / 99.0))
-    alpha = jr.permutation(key2, a)
+    alpha = jr.permutation(key1, a)
     alpha = jnp.concatenate([jnp.array([1000.0]), alpha])
 
-    y = jr.uniform(key3, shape=(*i.shape, ndim), minval=-5.0, maxval=5.0)
+    y = jr.uniform(key2, shape=(*i.shape, ndim), minval=-5.0, maxval=5.0)
     x_opt = jr.uniform(key, shape=(ndim,), minval=-4.0, maxval=4.0)
     y = y.at[0].set(x_opt)
 
@@ -414,12 +403,12 @@ def gallagher_101_peaks(
 
 @register_function("gallagher_21_peaks")
 def gallagher_21_peaks(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-) -> jax.Array:
-    key1, key2, key3 = jr.split(key, 3)
-
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
-    R = rotation_matrix(ndim, key1)
+    key = jr.key(0)
+    key = jr.fold_in(key, Q[0, 0])
+    key1, key2 = jr.split(key)
     i = jnp.arange(1, 22, dtype=jnp.float32)
     j = jnp.arange(0, 20, dtype=jnp.float32)
 
@@ -427,10 +416,10 @@ def gallagher_21_peaks(
     w = w.at[0].set(10.0)
 
     a = jnp.power(1000, 2.0 * (j / 19.0))
-    alpha = jr.permutation(key2, a)
+    alpha = jr.permutation(key1, a)
     alpha = jnp.concatenate([jnp.array([1000.0**2]), alpha])
 
-    y = jr.uniform(key3, shape=(*i.shape, ndim), minval=-4.9, maxval=4.9)
+    y = jr.uniform(key2, shape=(*i.shape, ndim), minval=-4.9, maxval=4.9)
     x_opt = jr.uniform(key, shape=(ndim,), minval=-3.92, maxval=3.92)
     y = y.at[0].set(x_opt)
 
@@ -456,11 +445,10 @@ def gallagher_21_peaks(
 
 
 @register_function("katsuura")
-def katsuura(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
-    key1, key2 = jr.split(key)
+def katsuura(
+        x: jax.Array, x_opt: jax.Array,
+        R: jax.Array, Q: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
-    R = rotation_matrix(ndim, key1)
-    Q = rotation_matrix(ndim, key2)
     lamb = lambda_func(ndim, alpha=100.0)
     z = Q @ lamb @ R @ (x - x_opt)
 
@@ -489,21 +477,20 @@ def katsuura(x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array) -> jax.Array:
 
 @register_function("lunacek_bi_rastrigin")
 def lunacek_bi_rastrigin(
-    x: jax.Array, key: PRNGKeyArray, x_opt: jax.Array
-
+    x: jax.Array, x_opt: jax.Array,
+    R: jax.Array, Q: jax.Array
 
 ) -> jax.Array:
     ndim = x.shape[-1]
-    key1, key2, key3 = jr.split(key, 3)
+    key = jr.key(0)
+    key = jr.fold_in(key, Q[0, 0])
     mu0 = 2.5
     d = 1.0
     s = 1.0 - 1.0 / (2.0 * jnp.sqrt(ndim + 20.0) - 8.2)
 
-    x_opt = (mu0 / 2.0) * bernoulli_vector(ndim, key1)
+    x_opt = (mu0 / 2.0) * bernoulli_vector(ndim, key)
     x_hat = 2 * jnp.sign(x_opt) * x
 
-    R = rotation_matrix(ndim, key2)
-    Q = rotation_matrix(ndim, key3)
     lamb = lambda_func(ndim, alpha=100.0)
     z = Q @ lamb @ R @ (x_hat - mu0 * jnp.ones_like(x))
 
