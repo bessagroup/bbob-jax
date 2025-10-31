@@ -1,6 +1,6 @@
 [project]
 name = "bbob-jax"
-version = "0.5.0"
+version = "0.6.0"
 description = "BBOB Benchmark function implemented in JAX"
 readme = "README.md"
 authors = [
