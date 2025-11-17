@@ -6,7 +6,7 @@ import jax.random as jr
 import pytest
 
 from bbob_jax import registry, registry_original
-from bbob_jax.plotting import create_mesh
+from bbob_jax.plotting import _create_mesh
 
 # Combine both registries into one parameterized source
 pytest_registry = [
@@ -67,7 +67,7 @@ def test_function_output_jit(name, fn, dim):
 def test_function_vmap(name, fn, dim, seed):
     key = jr.key(seed)
     try:
-        _, _, Z = create_mesh(fn, key, bounds=(-5.0, 5.0), px=300)
+        _, _, Z = _create_mesh(fn, key, bounds=(-5.0, 5.0), px=300)
     except Exception as e:
         pytest.fail(f"Function {name} raised an exception during vmap: {e}")
 

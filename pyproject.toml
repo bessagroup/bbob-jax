@@ -17,7 +17,6 @@ classifiers = [
 dependencies = [
   "jax",
   "jaxtyping>=0.3.3",
-  "matplotlib>=3.10.7"
 ]
 description = "BBOB Benchmark function implemented in JAX"
 keywords = ["jax", "bbob", "benchmarking", "black-box", "optimization"]
@@ -26,9 +25,13 @@ name = "bbob-jax"
 readme = "README.md"
 requires-python = ">=3.10"
 urls = {repository = "https://github.com/bessagroup/bbob-jax"}
-version = "0.6.0"
+version = "0.7.0"
 
 [project.optional-dependencies]
+plot = [
+    "matplotlib>=3.10.7",
+]
+
 dev = [
   "pre-commit>=4.4.0"
 ]

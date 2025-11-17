@@ -14,7 +14,18 @@ This repository providess the original BBOB 24 noise-free, real-parameter, singl
 
 ## Statement of need
 
-<!-- Write here the statement of need for this package -->
+This repository providess the original BBOB 24 noise-free, real-parameter, single-objective benchmark functions reimplemented in JAX. Originally written in C, these functions have been translated to JAX to enable automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance — making them ideal for research in optimization, machine learning, and evolutionary algorithms.
+
+<div align="center">
+  <img src="img/bbob_functions_overview_3d.png" alt="BBOB functions 3D overview" width="80%">
+  <br>
+  <em>3D surface plots of the 24 BBOB benchmark functions.</em>
+  <br><br>
+  <img src="img/bbob_functions_overview_2d.png" alt="BBOB functions 2D overview" width="80%">
+  <br>
+  <em>2D contour plots of the 24 BBOB benchmark functions.</em>
+</div>
+
 
 ## Authorship
 

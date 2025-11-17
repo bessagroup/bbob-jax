@@ -2,7 +2,7 @@
 Module for plotting BBob functions in 2D and 3D.
 """
 
-from bbob_jax._src.plotting import create_mesh, plot_2d, plot_3d
+from bbob_jax._src.plotting import _create_mesh, plot_2d, plot_3d
 
 #                                                        Authorship and Credits
 # =============================================================================
@@ -15,5 +15,5 @@ __status__ = "Stable"
 __all__ = [
     "plot_2d",
     "plot_3d",
-    "create_mesh",
+    "_create_mesh",
 ]
