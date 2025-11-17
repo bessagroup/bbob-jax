@@ -1,14 +1,7 @@
 [project]
-name = "bbob-jax"
-version = "0.6.0"
-description = "BBOB Benchmark function implemented in JAX"
-readme = "README.md"
 authors = [
-    {name = "M.P. van der Schelling", email = "m.p.vanderschelling@tudelft.nl"}
+  {email = "m.p.vanderschelling@tudelft.nl", name = "M.P. van der Schelling"}
 ]
-urls = {repository = "https://github.com/bessagroup/bbob-jax"}
-keywords = ["jax", "bbob", "benchmarking", "black-box", "optimization"]
-
 classifiers = [
   "License :: OSI Approved :: BSD License",
   "Development Status :: 3 - Alpha",
@@ -21,73 +14,72 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Information Analysis",
   "Topic :: Scientific/Engineering :: Mathematics"
 ]
-
-license = {text = "BSD-3-Clause"}
-
 dependencies = [
-    "jax",
-    "jaxtyping>=0.3.3",
-    "matplotlib>=3.10.7",
+  "jax",
+  "jaxtyping>=0.3.3",
+  "matplotlib>=3.10.7"
 ]
-
+description = "BBOB Benchmark function implemented in JAX"
+keywords = ["jax", "bbob", "benchmarking", "black-box", "optimization"]
+license = {text = "BSD-3-Clause"}
+name = "bbob-jax"
+readme = "README.md"
 requires-python = ">=3.10"
-
-
-[tool.ruff]
-line-length = 79
-
-[tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # Pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "UP",  # pyupgrade
-]
-ignore = [
-    "E226",
-    "E3",
-    "E731",
-    "C901",
-    "UP045",
-    "B027",
-    "B012",
-]
-
-exclude = [
-    "__pycache__",
-    "dist",
-	"*.egg",
-	"tests",
-	".git",
-	"notebooks",
-	"tests/*",
-    "docs/*",
-]
-
-[tool.uv]
-package = true
+urls = {repository = "https://github.com/bessagroup/bbob-jax"}
+version = "0.6.0"
 
 [project.optional-dependencies]
 dev = [
   "pre-commit>=4.4.0"
 ]
-
+docs = [
+  "mkdocs-gen-files>=0.5.0",
+  "mkdocs-include-exclude-files>=0.1.0",
+  "mkdocs-ipynb>=0.1.1",
+  "mkdocs-material>=9.6.20",
+  "mkdocstrings>=0.30.1",
+  "mkdocstrings-python>=1.18.2",
+  "pymdown-extensions>=10.16.1"
+]
 tests = [
   "pytest"
-]
-
-docs = [
-    "mkdocs-gen-files>=0.5.0",
-    "mkdocs-include-exclude-files>=0.1.0",
-    "mkdocs-ipynb>=0.1.1",
-    "mkdocs-material>=9.6.20",
-    "mkdocstrings>=0.30.1",
-    "mkdocstrings-python>=1.18.2",
-    "pymdown-extensions>=10.16.1",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 79
+
+[tool.ruff.lint]
+exclude = [
+  "__pycache__",
+  "dist",
+  "*.egg",
+  "tests",
+  ".git",
+  "notebooks",
+  "tests/*",
+  "docs/*"
+]
+ignore = [
+  "E226",
+  "E3",
+  "E731",
+  "C901",
+  "UP045",
+  "B027",
+  "B012"
+]
+select = [
+  "E", # pycodestyle errors
+  "W", # pycodestyle warnings
+  "F", # Pyflakes
+  "I", # isort
+  "B", # flake8-bugbear
+  "UP" # pyupgrade
+]
+
+[tool.uv]
+package = true

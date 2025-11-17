@@ -7,16 +7,13 @@ from jaxtyping import PRNGKeyArray
 def fopt(key: PRNGKeyArray) -> jax.Array:
     """Generate a random optimal function value f_opt."""
     return jnp.round(
-        jnp.clip(100.0 * jr.cauchy(key, shape=()), min=-1000.0, max=1000.0), 2)
+        jnp.clip(100.0 * jr.cauchy(key, shape=()), min=-1000.0, max=1000.0), 2
+    )
 
 
 def xopt(key: PRNGKeyArray, ndim: int) -> jax.Array:
     """Generate a random optimal solution x_opt within [-4, 4]^ndim."""
-    return jr.uniform(
-        key,
-        shape=(ndim,),
-        minval=-4.0,
-        maxval=4.0)
+    return jr.uniform(key, shape=(ndim,), minval=-4.0, maxval=4.0)
 
 
 def tosz_func(x):

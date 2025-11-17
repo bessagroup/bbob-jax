@@ -86,8 +86,9 @@ def plot_3d(
         fig = ax.get_figure()
 
     # Plot the surface
-    _ = ax.plot_surface(X, Y, Z_shifted, cmap="viridis",
-                        norm=SymLogNorm(), zorder=1)
+    _ = ax.plot_surface(
+        X, Y, Z_shifted, cmap="viridis", norm=SymLogNorm(), zorder=1
+    )
 
     # Remove ticks for a cleaner look
     ax.set_xticks([])

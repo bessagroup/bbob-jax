@@ -25,8 +25,9 @@ def register_function(format: str) -> Callable[[BBOBFn], BBOBFn]:
             return fn(x, x_opt=x_opt, R=eye, Q=eye)
 
         @wraps(fn)
-        def wrapper_rand(x: jax.Array, key: PRNGKeyArray, *args, **kwargs
-                         ) -> jax.Array:
+        def wrapper_rand(
+            x: jax.Array, key: PRNGKeyArray, *args, **kwargs
+        ) -> jax.Array:
             ndim = x.shape[-1]
             key1, key2 = jr.split(key)
             x_opt = xopt(key, ndim)

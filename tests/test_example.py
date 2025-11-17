@@ -9,8 +9,10 @@ from bbob_jax import registry, registry_original
 from bbob_jax.plotting import create_mesh
 
 # Combine both registries into one parameterized source
-pytest_registry = [pytest.param(
-    name, fn, id=f"registry::{name}") for name, fn in registry.items()]
+pytest_registry = [
+    pytest.param(name, fn, id=f"registry::{name}")
+    for name, fn in registry.items()
+]
 pytest_registry_original = [
     pytest.param(name, fn, id=f"registry_original::{name}")
     for name, fn in registry_original.items()
@@ -86,7 +88,8 @@ def test_function_grad(name, fn, dim, seed):
         grad_value = jax.vmap(grad_fn)(x)
     except Exception as e:
         pytest.fail(
-            f"Function {name} raised an exception during jax.grad: {e}")
+            f"Function {name} raised an exception during jax.grad: {e}"
+        )
 
     assert grad_value.shape == x.shape, (
         f"Function {name} gradient has incorrect shape: "

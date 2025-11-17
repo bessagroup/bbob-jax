@@ -26,18 +26,18 @@ __status__ = "Stable"
 
 @register_function("sphere")
 def sphere(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     z = x - x_opt
     return jnp.sum(jnp.square(z))
 
 
 @register_function("ellipsoid_seperable")
 def ellipsoid_seperable(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
-    i = jnp.arange(1, ndim+1, dtype=x.dtype)
+    i = jnp.arange(1, ndim + 1, dtype=x.dtype)
     w = jnp.power(10.0, 6.0 * (i - 1) / (ndim - 1))
     z = tosz_func(x - x_opt)
     return jnp.sum(w * z**2)
@@ -45,8 +45,8 @@ def ellipsoid_seperable(
 
 @register_function("rastrigin_seperable")
 def rastrigin_seperable(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
 
     alpha = lambda_func(ndim, alpha=10.0)
@@ -58,19 +58,17 @@ def rastrigin_seperable(
 
 @register_function("skew_rastrigin_bueche")
 def skew_rastrigin_bueche(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
-    i = jnp.arange(1, ndim+1, dtype=x.dtype)
+    i = jnp.arange(1, ndim + 1, dtype=x.dtype)
     s = jnp.power(10, 0.5 * ((i - 1) / (ndim - 1)))
-    odd_indices = jnp.arange(1, ndim+1, 2)
+    odd_indices = jnp.arange(1, ndim + 1, 2)
 
     z = s * tosz_func(x - x_opt)
 
     # Modify odd indices
-    z_odd = jnp.where(
-        z[odd_indices] > 0, z[odd_indices] * 10, z[odd_indices]
-    )
+    z_odd = jnp.where(z[odd_indices] > 0, z[odd_indices] * 10, z[odd_indices])
     z = z.at[odd_indices].set(z_odd)
 
     # Compute terms
@@ -83,8 +81,8 @@ def skew_rastrigin_bueche(
 
 @register_function("linear_slope")
 def linear_slope(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     key = jr.key(0)
     key = jr.fold_in(key, Q[0, 0])
@@ -102,8 +100,8 @@ def linear_slope(
 
 @register_function("attractive_sector")
 def attractive_sector(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=10.0)
     z = Q @ lamb @ R @ (x - x_opt)
@@ -119,14 +117,12 @@ def attractive_sector(
 
 @register_function("step_ellipsoid")
 def step_ellipsoid(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
-    i = jnp.arange(1, ndim+1, dtype=x.dtype)
+    i = jnp.arange(1, ndim + 1, dtype=x.dtype)
     lamb = lambda_func(ndim, alpha=10.0)
-    mult = jnp.power(
-        10.0, 2 * ((i - 1) / (ndim - 1))
-    )
+    mult = jnp.power(10.0, 2 * ((i - 1) / (ndim - 1)))
 
     # Compute ẑ
     z_hat = lamb @ R @ (x - x_opt)
@@ -140,16 +136,14 @@ def step_ellipsoid(
     z = Q @ z_dash
 
     # Compute final f
-    result = 0.1 * jnp.maximum(
-        jnp.abs(z_hat[0]) / 1e4, jnp.sum(mult * z**2)
-    )
+    result = 0.1 * jnp.maximum(jnp.abs(z_hat[0]) / 1e4, jnp.sum(mult * z**2))
     return result + penalty(x)
 
 
 @register_function("rosenbrock")
 def rosenbrock(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     zmax = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0)
     # Shift and scale
@@ -171,8 +165,8 @@ def rosenbrock(
 
 @register_function("rosenbrock_rotated")
 def rosenbrock_rotated(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     zmax = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0)
 
@@ -193,8 +187,9 @@ def rosenbrock_rotated(
 
 
 @register_function("ellipsoid")
-def ellipsoid(x: jax.Array, x_opt: jax.Array,
-              R: jax.Array, Q: jax.Array) -> jax.Array:
+def ellipsoid(
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     idx = jnp.arange(ndim, dtype=x.dtype)
     z = tosz_func(x @ R)
@@ -204,8 +199,8 @@ def ellipsoid(x: jax.Array, x_opt: jax.Array,
 
 @register_function("discuss")
 def discuss(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     _ = x.shape[-1]
     z = tosz_func(R @ (x - x_opt))
     first = 1e6 * jnp.power(z[..., 0], 2)
@@ -215,27 +210,27 @@ def discuss(
 
 @register_function("bent_cigar")
 def bent_cigar(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     _ = x.shape[-1]
     z = R @ tasy_func(R @ (x - x_opt), beta=0.5)
-    return z[0]**2 + 1e6 * jnp.sum(z[1:]**2)
+    return z[0] ** 2 + 1e6 * jnp.sum(z[1:] ** 2)
 
 
 @register_function("sharp_ridge")
 def sharp_ridge(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=10.0)
     z = Q @ lamb @ R @ (x - x_opt)
-    return z[0]**2 + 100.0 * jnp.sqrt(jnp.sum(z[1:]**2))
+    return z[0] ** 2 + 100.0 * jnp.sqrt(jnp.sum(z[1:] ** 2))
 
 
 @register_function("sum_of_different_powers")
 def sum_of_different_powers(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     z = R @ (x - x_opt)
     idx = jnp.arange(1, ndim + 1, dtype=x.dtype)
@@ -244,8 +239,8 @@ def sum_of_different_powers(
 
 @register_function("rastrigin")
 def rastrigin(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=10.0)
     z = R @ lamb @ Q @ tasy_func(tosz_func(R @ (x - x_opt)), beta=0.2)
@@ -255,8 +250,8 @@ def rastrigin(
 
 @register_function("weierstrass")
 def weierstrass(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=0.01)
     z = R @ lamb @ Q @ tosz_func(R @ (x - x_opt))
@@ -280,8 +275,8 @@ def weierstrass(
 
 @register_function("schaffer_f7_condition_10")
 def schaffer_f7_condition_10(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=10.0)
     z = lamb @ Q @ tasy_func(R @ (x - x_opt), beta=0.5)
@@ -299,8 +294,8 @@ def schaffer_f7_condition_10(
 
 @register_function("schaffer_f7_condition_1000")
 def schaffer_f7_condition_1000(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=1000.0)
     z = lamb @ Q @ tasy_func(R @ (x - x_opt), beta=0.5)
@@ -318,8 +313,8 @@ def schaffer_f7_condition_1000(
 
 @register_function("griewank_rosenbrock_f8f2")
 def griewank_rosenbrock_f8f2(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     z = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0) * (R @ x) + 0.5
     s = 100 * (z[:-1] ** 2 - z[1:]) ** 2 + (z[:-1] - 1) ** 2
@@ -329,8 +324,8 @@ def griewank_rosenbrock_f8f2(
 
 @register_function("schwefel_xsinx")
 def schwefel_xsinx(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     key = jr.key(0)
     key = jr.fold_in(key, Q[0, 0])
@@ -359,9 +354,8 @@ def schwefel_xsinx(
 
 @register_function("gallagher_101_peaks")
 def gallagher_101_peaks(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
-
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     key = jr.key(0)
     key = jr.fold_in(key, Q[0, 0])
@@ -403,8 +397,8 @@ def gallagher_101_peaks(
 
 @register_function("gallagher_21_peaks")
 def gallagher_21_peaks(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     key = jr.key(0)
     key = jr.fold_in(key, Q[0, 0])
@@ -446,8 +440,8 @@ def gallagher_21_peaks(
 
 @register_function("katsuura")
 def katsuura(
-        x: jax.Array, x_opt: jax.Array,
-        R: jax.Array, Q: jax.Array) -> jax.Array:
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+) -> jax.Array:
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=100.0)
     z = Q @ lamb @ R @ (x - x_opt)
@@ -477,9 +471,7 @@ def katsuura(
 
 @register_function("lunacek_bi_rastrigin")
 def lunacek_bi_rastrigin(
-    x: jax.Array, x_opt: jax.Array,
-    R: jax.Array, Q: jax.Array
-
+    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
     ndim = x.shape[-1]
     key = jr.key(0)
