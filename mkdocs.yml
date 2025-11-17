@@ -100,7 +100,8 @@ plugins:
 nav:
     - 'index.md'
     - Installation: 'installation.md'
-    - API Reference:
+    - Getting Started: 'usage.md'
+    - API Reference: 
         - 'api.md'
-    - License:
+    - License: 
         - 'license.md'
