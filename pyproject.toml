@@ -69,12 +69,11 @@ exclude = [
 [tool.uv]
 package = true
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
-    "coco-experiment>=2.8.1",
+  "pre-commit>=4.4.0"
 ]
 
-[project.optional-dependencies]
 tests = [
   "pytest"
 ]

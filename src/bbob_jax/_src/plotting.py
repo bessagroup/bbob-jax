@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from jax import vmap
 from jaxtyping import PRNGKeyArray
-from matplotlib.colors import LogNorm
+from matplotlib.colors import LogNorm, SymLogNorm
 
 #                                                          Authorship & Credits
 # =============================================================================
@@ -76,6 +76,7 @@ def plot_3d(
     ax: Optional[plt.Axes] = None,
 ):
     X, Y, Z = create_mesh(fn, key, bounds, px)
+    Z_shifted = Z - jnp.min(Z)
 
     # Create a figure and axis if none provided
     if ax is None:
@@ -85,7 +86,8 @@ def plot_3d(
         fig = ax.get_figure()
 
     # Plot the surface
-    _ = ax.plot_surface(X, Y, Z, cmap="viridis", norm=LogNorm(), zorder=1)
+    _ = ax.plot_surface(X, Y, Z_shifted, cmap="viridis",
+                        norm=SymLogNorm(), zorder=1)
 
     # Remove ticks for a cleaner look
     ax.set_xticks([])
