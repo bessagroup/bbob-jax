@@ -3,15 +3,16 @@
 
 # Standard
 from collections.abc import Callable
-from functools import partial
 from typing import Optional
 
 # Third-party
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-from jax import vmap
 from jaxtyping import PRNGKeyArray
 from matplotlib.colors import LogNorm, SymLogNorm
+
+# Local
+from .utils import _create_mesh
 
 #                                                          Authorship & Credits
 # =============================================================================
@@ -141,41 +142,3 @@ def plot_3d(
     ax.set_zticks([])
 
     return fig, ax
-
-
-def _create_mesh(
-    fn: Callable,
-    key: PRNGKeyArray,
-    bounds: tuple[float, float],
-    px: int,
-):
-    """Create a mesh grid and evaluate function values.
-
-    Generates X, Y coordinate meshes and evaluates the function at each point
-    to produce Z values.
-
-    Parameters
-    ----------
-    fn : Callable
-        BBOB function to evaluate. Should accept (x, key) parameters.
-    key : PRNGKeyArray
-        JAX random key for function evaluation.
-    bounds : tuple[float, float]
-        Min and max values for both x and y axes.
-    px : int
-        Number of pixels per axis (resolution).
-
-    Returns
-    -------
-    tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]
-        X meshgrid, Y meshgrid, and Z function values.
-    """
-    x_vals = jnp.linspace(*bounds, px)
-    X, Y = jnp.meshgrid(x_vals, x_vals)
-
-    points = jnp.stack([X.ravel(), Y.ravel()], axis=-1)
-    partial_fn = partial(fn, key=key)
-    loss_values = vmap(partial_fn)(points)
-    Z = loss_values.reshape(X.shape)
-
-    return X, Y, Z

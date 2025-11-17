@@ -6,7 +6,7 @@ import jax.random as jr
 import pytest
 
 from bbob_jax import registry, registry_original
-from bbob_jax.plotting import _create_mesh
+from bbob_jax._src.utils import _create_mesh
 
 # Combine both registries into one parameterized source
 pytest_registry = [
