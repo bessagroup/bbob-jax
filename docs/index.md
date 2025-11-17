@@ -1,5 +1,7 @@
 # BBOB Benchmark set for JAX
 
+[View on GitHub](https://github.com/bessagroup/bbob-jax)
+
 JAX implementation of the BBOB Benchmark functions for black-box optimization, based on the original definitions by Finck et al. (2009) [^1].
 
 **First publication:** October 17, 2025

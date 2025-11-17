@@ -1,6 +1,6 @@
 # BBOB Benchmark set for JAX
 
-| [**GitHub**](https://github.com/mpvanderschelling/bbob-jax)
+| [**GitHub**](https://github.com/bessagroup/bbob-jax)
 | [**PyPI**](https://pypi.org/project/bbob-jax/)
 | [**Documentation**](https://bbob-jax.readthedocs.io/)
 |
