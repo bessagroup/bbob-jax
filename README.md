@@ -3,7 +3,7 @@
 | [**GitHub**](https://github.com/bessagroup/bbob-jax)
 | [**PyPI**](https://pypi.org/project/bbob-jax/)
 | [**Documentation**](https://bbob-jax.readthedocs.io/)
-|
+| [**Zenodo**](https://doi.org/10.5281/zenodo.17426894) 
 
 JAX implementation of the BBOB Benchmark functions for black-box optimization, based on the original definitions by Finck et al. (2009) [^1].
 
@@ -13,7 +13,7 @@ JAX implementation of the BBOB Benchmark functions for black-box optimization, b
 
 ## Statement of need
 
-This repository provides the original BBOB 24 noise-free, real-parameter, single-objective benchmark functions reimplemented in JAX. Originally written in C, these functions have been translated to JAX to enable automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance — making them ideal for research in optimization, machine learning, and evolutionary algorithms.
+This repository provides the original BBOB 24 noise-free, real-parameter, single-objective benchmark functions reimplemented in JAX. Originally written in C, these functions have been translated to JAX to enable automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance; making them ideal for research in optimization, machine learning, and evolutionary algorithms.
 
 <div align="center">
   <img src="img/bbob_functions_overview_3d.png" alt="BBOB functions 3D overview" width="80%">
@@ -25,7 +25,7 @@ This repository provides the original BBOB 24 noise-free, real-parameter, single
   <em>2D contour plots of the 24 BBOB benchmark functions.</em>
 </div>
 
-## Authorship
+## Authorship & Citation
 
 **Authors**:
 - Martin van der Schelling ([m.p.vanderschelling@tudelft.nl](mailto:m.p.vanderschelling@tudelft.nl))
@@ -39,6 +39,22 @@ This repository provides the original BBOB 24 noise-free, real-parameter, single
 **Maintainer affiliation:**
 - Delft University of Technology (Bessa Research Group)
 
+If you use `bbob-jax` in your research or in a scientific publication, it is appreciated that you cite the paper below:
+
+**Zenodo** ([link](https://doi.org/10.5281/zenodo.17426894)):
+```bibtex
+@software{vanderSchelling2025,
+  title        = {Black-box optimization benchmarking (bbob) problem
+                   set for JAX},
+  author       = {van der Schelling, M.P.},
+  month        = {nov},
+  year         = {2025},
+  publisher    = {Zenodo},
+  version      = {v1.0.0},
+  doi          = {10.5281/zenodo.17426894},
+  url          = {https://doi.org/10.5281/zenodo.17426894},
+}
+```
 
 ## Getting started
 

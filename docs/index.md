@@ -10,7 +10,7 @@ JAX implementation of the BBOB Benchmark functions for black-box optimization, b
 
 ## Summary
 
-This repository provides the original BBOB 24 noise-free, real-parameter, single-objective benchmark functions reimplemented in JAX. Originally written in C, these functions have been translated to JAX to enable automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance — making them ideal for research in optimization, machine learning, and evolutionary algorithms.
+This repository provides the original BBOB 24 noise-free, real-parameter, single-objective benchmark functions reimplemented in JAX. Originally written in C, these functions have been translated to JAX to enable automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance; making them ideal for research in optimization, machine learning, and evolutionary algorithms.
 
 ## Statement of need
 
@@ -62,6 +62,10 @@ This project builds on and complements established benchmarking efforts and tool
 ## Community Support
 
 If you find any **issues, bugs or problems** with this package, please use the [GitHub issue tracker](https://github.com/bessagroup/bbob-jax/issues) to report them.
+
+## Citation
+
+--8<-- ".citation.md"
 
 ## License
 
