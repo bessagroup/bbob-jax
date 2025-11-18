@@ -3,15 +3,16 @@
 
 # Standard
 from collections.abc import Callable
-from functools import partial
 from typing import Optional
 
 # Third-party
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
-from jax import vmap
 from jaxtyping import PRNGKeyArray
 from matplotlib.colors import LogNorm, SymLogNorm
+
+# Local
+from .utils import _create_mesh
 
 #                                                          Authorship & Credits
 # =============================================================================
@@ -29,18 +30,32 @@ def plot_2d(
     ax: Optional[plt.Axes] = None,
     log_norm: bool = True,
 ):
-    """
-    Plot a 2D heatmap of a function f(x, key) over a given range using imshow.
+    """Plot a 2D heatmap of a BBOB function.
 
-    Args:
-        fn: Callable, function that maps (x, key) -> scalar loss
-        key: JAX PRNGKey
-        bounds: Tuple (min, max) for x and y axes
-        px: Resolution of the mesh grid
-        ax: Optional matplotlib Axes
-        log_norm: Whether to apply logarithmic normalization to the color scale
+    Creates a 2D visualization of the function landscape using imshow.
+
+    Parameters
+    ----------
+    fn : Callable
+        BBOB function to plot. Should accept (x, key) parameters.
+    key : PRNGKeyArray
+        JAX random key for function evaluation.
+    bounds : tuple[float, float], optional
+        Min and max values for both x and y axes, by default (-5.0, 5.0).
+    px : int, optional
+        Number of pixels per axis (resolution), by default 300.
+    ax : Optional[plt.Axes], optional
+        Matplotlib axes to plot on. If None, creates new figure,
+        by default None.
+    log_norm : bool, optional
+        Whether to use logarithmic normalization for colors, by default True.
+
+    Returns
+    -------
+    tuple[plt.Figure, plt.Axes]
+        Figure and axes objects containing the plot.
     """
-    X, Y, Z = create_mesh(fn, key, bounds, px)
+    X, Y, Z = _create_mesh(fn, key, bounds, px)
 
     # Create a figure and axis if none provided
     if ax is None:
@@ -75,7 +90,31 @@ def plot_3d(
     px: int = 300,
     ax: Optional[plt.Axes] = None,
 ):
-    X, Y, Z = create_mesh(fn, key, bounds, px)
+    """Plot a 3D surface of a BBOB function.
+
+    Creates a 3D visualization of the function landscape with shifted z-values
+    for better visualization.
+
+    Parameters
+    ----------
+    fn : Callable
+        BBOB function to plot. Should accept (x, key) parameters.
+    key : PRNGKeyArray
+        JAX random key for function evaluation.
+    bounds : tuple[float, float], optional
+        Min and max values for both x and y axes, by default (-5.0, 5.0).
+    px : int, optional
+        Number of pixels per axis (resolution), by default 300.
+    ax : Optional[plt.Axes], optional
+        Matplotlib 3D axes to plot on. If None, creates new figure,
+        by default None.
+
+    Returns
+    -------
+    tuple[plt.Figure, plt.Axes]
+        Figure and 3D axes objects containing the plot.
+    """
+    X, Y, Z = _create_mesh(fn, key, bounds, px)
     Z_shifted = Z - jnp.min(Z)
 
     # Create a figure and axis if none provided
@@ -87,7 +126,14 @@ def plot_3d(
 
     # Plot the surface
     _ = ax.plot_surface(
-        X, Y, Z_shifted, cmap="viridis", norm=SymLogNorm(), zorder=1
+        X,
+        Y,
+        Z_shifted,
+        cmap="viridis",
+        norm=SymLogNorm(
+            linthresh=1e-3,
+        ),
+        zorder=1,
     )
 
     # Remove ticks for a cleaner look
@@ -96,20 +142,3 @@ def plot_3d(
     ax.set_zticks([])
 
     return fig, ax
-
-
-def create_mesh(
-    fn: Callable,
-    key: PRNGKeyArray,
-    bounds: tuple[float, float],
-    px: int,
-):
-    x_vals = jnp.linspace(*bounds, px)
-    X, Y = jnp.meshgrid(x_vals, x_vals)
-
-    points = jnp.stack([X.ravel(), Y.ravel()], axis=-1)
-    partial_fn = partial(fn, key=key)
-    loss_values = vmap(partial_fn)(points)
-    Z = loss_values.reshape(X.shape)
-
-    return X, Y, Z

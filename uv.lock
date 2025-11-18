@@ -33,13 +33,12 @@ wheels = [
 
 [[package]]
 name = "bbob-jax"
-version = "0.6.0"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "jax", version = "0.6.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "jax", version = "0.8.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "jaxtyping" },
-    { name = "matplotlib" },
 ]
 
 [package.optional-dependencies]
@@ -55,20 +54,18 @@ docs = [
     { name = "mkdocstrings-python" },
     { name = "pymdown-extensions" },
 ]
+plot = [
+    { name = "matplotlib" },
+]
 tests = [
     { name = "pytest" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pre-commit" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "jax" },
     { name = "jaxtyping", specifier = ">=0.3.3" },
-    { name = "matplotlib", specifier = ">=3.10.7" },
+    { name = "matplotlib", marker = "extra == 'plot'", specifier = ">=3.10.7" },
     { name = "mkdocs-gen-files", marker = "extra == 'docs'", specifier = ">=0.5.0" },
     { name = "mkdocs-include-exclude-files", marker = "extra == 'docs'", specifier = ">=0.1.0" },
     { name = "mkdocs-ipynb", marker = "extra == 'docs'", specifier = ">=0.1.1" },
@@ -79,10 +76,7 @@ requires-dist = [
     { name = "pymdown-extensions", marker = "extra == 'docs'", specifier = ">=10.16.1" },
     { name = "pytest", marker = "extra == 'tests'" },
 ]
-provides-extras = ["dev", "tests", "docs"]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pre-commit", specifier = ">=4.4.0" }]
+provides-extras = ["plot", "dev", "docs", "tests"]
 
 [[package]]
 name = "certifi"

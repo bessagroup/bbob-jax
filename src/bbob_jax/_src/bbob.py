@@ -28,6 +28,29 @@ __status__ = "Stable"
 def sphere(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Sphere function (F1).
+
+    Simple unimodal function with global optimum at origin.
+
+    ![Sphere function 3D surface](img/3d/sphere.png){ width=30% }
+    ![Sphere function 2D surface](img/2d/sphere.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     z = x - x_opt
     return jnp.sum(jnp.square(z))
 
@@ -36,6 +59,31 @@ def sphere(
 def ellipsoid_seperable(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Separable ellipsoid function (F2).
+
+    Unimodal function with high conditioning. Variables are independent.
+
+    ![Ellipsoid seperable function 3D surface](
+        img/3d/ellipsoid_seperable.png){ width=30% }
+    ![Ellipsoid seperable function 2D surface](
+        img/2d/ellipsoid_seperable.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     i = jnp.arange(1, ndim + 1, dtype=x.dtype)
     w = jnp.power(10.0, 6.0 * (i - 1) / (ndim - 1))
@@ -47,6 +95,32 @@ def ellipsoid_seperable(
 def rastrigin_seperable(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Separable Rastrigin function (F3).
+
+    Highly multimodal function with many local optima.
+    Variables are independent.
+
+    ![Rastrigin seperable function 3D surface](
+        img/3d/rastrigin_seperable.png){ width=30% }
+    ![Rastrigin seperable function 2D surface](
+        img/2d/rastrigin_seperable.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
 
     alpha = lambda_func(ndim, alpha=10.0)
@@ -60,6 +134,31 @@ def rastrigin_seperable(
 def skew_rastrigin_bueche(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Skewed Rastrigin-Bueche function (F4).
+
+    Multimodal function with asymmetric conditioning and skewed search space.
+
+    ![Skew rastrigin bueche function 3D surface](
+        img/3d/skew_rastrigin_bueche.png){ width=30% }
+    ![Skew rastrigin bueche function 2D surface](
+        img/2d/skew_rastrigin_bueche.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     i = jnp.arange(1, ndim + 1, dtype=x.dtype)
     s = jnp.power(10, 0.5 * ((i - 1) / (ndim - 1)))
@@ -83,6 +182,29 @@ def skew_rastrigin_bueche(
 def linear_slope(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Linear slope function (F5).
+
+    Simple linear function with a single optimum at the boundary.
+
+    ![Linear slope function 3D surface](img/3d/linear_slope.png){ width=30% }
+    ![Linear slope function 2D surface](img/2d/linear_slope.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     key = jr.key(0)
     key = jr.fold_in(key, Q[0, 0])
@@ -102,6 +224,31 @@ def linear_slope(
 def attractive_sector(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Attractive sector function (F6).
+
+    Unimodal function with smooth but highly asymmetric landscape.
+
+    ![Attractive sector function 3D surface](
+        img/3d/attractive_sector.png){ width=30% }
+    ![Attractive sector function 2D surface](
+        img/2d/attractive_sector.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=10.0)
     z = Q @ lamb @ R @ (x - x_opt)
@@ -119,6 +266,31 @@ def attractive_sector(
 def step_ellipsoid(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Step ellipsoid function (F7).
+
+    Unimodal function with plateau-like regions and discontinuities.
+
+    ![Step ellipsoid function 3D surface](
+        img/3d/step_ellipsoid.png){ width=30% }
+    ![Step ellipsoid function 2D surface](
+        img/2d/step_ellipsoid.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     i = jnp.arange(1, ndim + 1, dtype=x.dtype)
     lamb = lambda_func(ndim, alpha=10.0)
@@ -144,6 +316,31 @@ def step_ellipsoid(
 def rosenbrock(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Rosenbrock function (F8).
+
+    Classic benchmark with narrow valley leading to the optimum.
+
+    ![Rosenbrock function 3D surface](
+        img/3d/rosenbrock.png){ width=30% }
+    ![Rosenbrock function 2D surface](
+        img/2d/rosenbrock.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     zmax = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0)
     # Shift and scale
@@ -167,6 +364,31 @@ def rosenbrock(
 def rosenbrock_rotated(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Rosenbrock function, rotated (F9).
+
+    Rotated version of the Rosenbrock function with increased difficulty.
+
+    ![Rosenbrock rotated function 3D surface](
+        img/3d/rosenbrock_rotated.png){ width=30% }
+    ![Rosenbrock rotated function 2D surface](
+        img/2d/rosenbrock_rotated.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     zmax = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0)
 
@@ -190,6 +412,31 @@ def rosenbrock_rotated(
 def ellipsoid(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Ellipsoid function (F10).
+
+    Unimodal function with high conditioning, rotated.
+
+    ![Ellipsoid function 3D surface](
+        img/3d/ellipsoid.png){ width=30% }
+    ![Ellipsoid function 2D surface](
+        img/2d/ellipsoid.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     idx = jnp.arange(ndim, dtype=x.dtype)
     z = tosz_func(x @ R)
@@ -201,6 +448,29 @@ def ellipsoid(
 def discuss(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Discus function (F11).
+
+    Unimodal function with one direction having much higher sensitivity.
+
+    ![Discuss function 3D surface](img/3d/discuss.png){ width=30% }
+    ![Discuss function 2D surface](img/2d/discuss.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     _ = x.shape[-1]
     z = tosz_func(R @ (x - x_opt))
     first = 1e6 * jnp.power(z[..., 0], 2)
@@ -212,6 +482,29 @@ def discuss(
 def bent_cigar(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Bent cigar function (F12).
+
+    Unimodal function with a ridge, creating a cigar-like shape.
+
+    ![Bent cigar function 3D surface](img/3d/bent_cigar.png){ width=30% }
+    ![Bent cigar function 2D surface](img/2d/bent_cigar.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     _ = x.shape[-1]
     z = R @ tasy_func(R @ (x - x_opt), beta=0.5)
     return z[0] ** 2 + 1e6 * jnp.sum(z[1:] ** 2)
@@ -221,6 +514,29 @@ def bent_cigar(
 def sharp_ridge(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Sharp ridge function (F13).
+
+    Unimodal function with a sharp ridge, difficult to follow.
+
+    ![Sharp ridge function 3D surface](img/3d/sharp_ridge.png){ width=30% }
+    ![Sharp ridge function 2D surface](img/2d/sharp_ridge.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=10.0)
     z = Q @ lamb @ R @ (x - x_opt)
@@ -231,6 +547,31 @@ def sharp_ridge(
 def sum_of_different_powers(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Sum of different powers function (F14).
+
+    Unimodal function with different sensitivities across dimensions.
+
+    ![Sum of different powers function 3D surface](
+        img/3d/sum_of_different_powers.png){ width=30% }
+    ![Sum of different powers function 2D surface](
+        img/2d/sum_of_different_powers.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     z = R @ (x - x_opt)
     idx = jnp.arange(1, ndim + 1, dtype=x.dtype)
@@ -241,6 +582,30 @@ def sum_of_different_powers(
 def rastrigin(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Rastrigin function (F15).
+
+    Highly multimodal function with many regularly distributed local
+    optima.
+
+    ![Rastrigin function 3D surface](img/3d/rastrigin.png){ width=30% }
+    ![Rastrigin function 2D surface](img/2d/rastrigin.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=10.0)
     z = R @ lamb @ Q @ tasy_func(tosz_func(R @ (x - x_opt)), beta=0.2)
@@ -252,6 +617,30 @@ def rastrigin(
 def weierstrass(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Weierstrass function (F16).
+
+    Highly multimodal function with small peaks everywhere,
+    continuous but non-differentiable.
+
+    ![Weierstrass function 3D surface](img/3d/weierstrass.png){ width=30% }
+    ![Weierstrass function 2D surface](img/2d/weierstrass.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=0.01)
     z = R @ lamb @ Q @ tosz_func(R @ (x - x_opt))
@@ -277,6 +666,31 @@ def weierstrass(
 def schaffer_f7_condition_10(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Schaffer F7 function with conditioning 10 (F17).
+
+    Multimodal function with asymmetric, moderately conditioned landscape.
+
+    ![Schaffer f7 condition 10 function 3D surface](
+        img/3d/schaffer_f7_condition_10.png){ width=30% }
+    ![Schaffer f7 condition 10 function 2D surface](
+        img/2d/schaffer_f7_condition_10.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=10.0)
     z = lamb @ Q @ tasy_func(R @ (x - x_opt), beta=0.5)
@@ -296,6 +710,31 @@ def schaffer_f7_condition_10(
 def schaffer_f7_condition_1000(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Schaffer F7 function with conditioning 1000 (F18).
+
+    Multimodal function with asymmetric, highly conditioned landscape.
+
+    ![Schaffer f7 condition 1000 function 3D surface](
+        img/3d/schaffer_f7_condition_1000.png){ width=30% }
+    ![Schaffer f7 condition 1000 function 2D surface](
+        img/2d/schaffer_f7_condition_1000.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=1000.0)
     z = lamb @ Q @ tasy_func(R @ (x - x_opt), beta=0.5)
@@ -315,6 +754,32 @@ def schaffer_f7_condition_1000(
 def griewank_rosenbrock_f8f2(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Griewank-Rosenbrock F8F2 function (F19).
+
+    Multimodal function combining Rosenbrock's narrow valley with
+    Griewank's modulation.
+
+    ![Griewank rosenbrock f8f2 function 3D surface](
+        img/3d/griewank_rosenbrock_f8f2.png){ width=30% }
+    ![Griewank rosenbrock f8f2 function 2D surface](
+        img/2d/griewank_rosenbrock_f8f2.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     z = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0) * (R @ x) + 0.5
     s = 100 * (z[:-1] ** 2 - z[1:]) ** 2 + (z[:-1] - 1) ** 2
@@ -326,6 +791,32 @@ def griewank_rosenbrock_f8f2(
 def schwefel_xsinx(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Schwefel x*sin(x) function (F20).
+
+    Multimodal function with many local optima and a global optimum
+    far from origin.
+
+    ![Schwefel xsinx function 3D surface](
+        img/3d/schwefel_xsinx.png){ width=30% }
+    ![Schwefel xsinx function 2D surface](
+        img/2d/schwefel_xsinx.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     key = jr.key(0)
     key = jr.fold_in(key, Q[0, 0])
@@ -356,6 +847,31 @@ def schwefel_xsinx(
 def gallagher_101_peaks(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Gallagher 101 peaks function (F21).
+
+    Multimodal function with 101 optima of different heights.
+
+    ![Gallagher 101 peaks function 3D surface](
+        img/3d/gallagher_101_peaks.png){ width=30% }
+    ![Gallagher 101 peaks function 2D surface](
+        img/2d/gallagher_101_peaks.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     key = jr.key(0)
     key = jr.fold_in(key, Q[0, 0])
@@ -399,6 +915,31 @@ def gallagher_101_peaks(
 def gallagher_21_peaks(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Gallagher 21 peaks function (F22).
+
+    Multimodal function with 21 optima of different heights.
+
+    ![Gallagher 21 peaks function 3D surface](
+        img/3d/gallagher_21_peaks.png){ width=30% }
+    ![Gallagher 21 peaks function 2D surface](
+        img/2d/gallagher_21_peaks.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     key = jr.key(0)
     key = jr.fold_in(key, Q[0, 0])
@@ -442,6 +983,30 @@ def gallagher_21_peaks(
 def katsuura(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Katsuura function (F23).
+
+    Highly multimodal function with many small local optima,
+    rugged landscape.
+
+    ![Katsuura function 3D surface](img/3d/katsuura.png){ width=30% }
+    ![Katsuura function 2D surface](img/2d/katsuura.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=100.0)
     z = Q @ lamb @ R @ (x - x_opt)
@@ -473,6 +1038,31 @@ def katsuura(
 def lunacek_bi_rastrigin(
     x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
 ) -> jax.Array:
+    """Lunacek bi-Rastrigin function (F24).
+
+    Highly multimodal function with two funnels and many local optima.
+
+    ![Lunacek bi rastrigin function 3D surface](
+        img/3d/lunacek_bi_rastrigin.png){ width=30% }
+    ![Lunacek bi rastrigin function 2D surface](
+        img/2d/lunacek_bi_rastrigin.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     key = jr.key(0)
     key = jr.fold_in(key, Q[0, 0])
