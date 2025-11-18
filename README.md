@@ -46,7 +46,7 @@ If you use `bbob-jax` in your research or in a scientific publication, it is app
 @software{vanderSchelling2025,
   title        = {Black-box optimization benchmarking (bbob) problem
                    set for JAX},
-  author       = {van der Schelling, M.P.},
+  author       = {van der Schelling, M. P. and Bessa, M A.},
   month        = {nov},
   year         = {2025},
   publisher    = {Zenodo},
