@@ -13,24 +13,24 @@ import jax.numpy as jnp
 import jax.random as jr
 from bbob_jax import registry
 
-# Choose a function by name; dimensionality is taken from x's shape
-fn = registry["sphere"]
+# Choose a function by name in the registry, and create the function by calling it with the dimenionality (`ndim`) and a random key (`key)`:
 key = jr.key(0)
+fn = registry["sphere"](ndim=2, key=key)
 
 x = jnp.zeros((2,))  # 2D input
-val = fn(x, key=key)
+val = fn(x)
 print(float(val))
 ```
 
-- `registry[<name>]`: randomized instance (shift/rotation and offset) via PRNG `key`.
-- The last dimension of `x` defines the problem dimension.
 
 ## Deterministic vs. Randomized
 
 Two registries are available:
 
-- `registry`: randomized instance; call as `fn(x, key=...)`.
+- `registry`: randomized instance; creates with `registory[<fn_name>](ndim=<dim>, key=<key>)`.
 - `registry_original`: deterministic (no shift/rotation/offset); call as `fn(x)`.
+
+Both returning registries produce function objects that can be called with just the decision vector `x`.
 
 ```python
 from bbob_jax import registry, registry_original
@@ -40,15 +40,11 @@ import jax.random as jr
 x = jnp.zeros((5,))
 
 # Randomized instance (shift, rotations, and fopt applied)
-val_rand = registry["rastrigin"](x, key=jr.key(42))
+val_rand = registry["rastrigin"](ndim=5, key=jr.key(0))(x)
 
 # Deterministic/original (no shift/rotation/fopt)
-val_det = registry_original["rastrigin"](x)
+val_det = registry_original["rastrigin"](ndim=5)(x)
 ```
-
-Notes:
-- Use the same `key` across many evaluations to keep the same instance.
-- Use a different `key` to create a different randomized instance.
 
 ## Evaluate Many Points (jit/vmap)
 
@@ -60,8 +56,7 @@ import jax.numpy as jnp
 import jax.random as jr
 from bbob_jax import registry
 
-fn = registry["rosenbrock"]
-key = jr.key(0)
+fn = registry["rosenbrock"](ndim=2, key=jr.key(0))
 
 # Same randomized instance across all points: pass the same key
 X = jnp.stack([
@@ -73,7 +68,7 @@ X = jnp.stack([
 def eval_point(x):
     return fn(x, key=key)
 
-batched = jax.vmap(eval_point)
+batched = jax.vmap(fn)
 compiled = jax.jit(batched)
 vals = compiled(X)
 print(vals)

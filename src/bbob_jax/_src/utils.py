@@ -1,5 +1,4 @@
 from collections.abc import Callable
-from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -70,12 +69,6 @@ def rotation_matrix(dim: int, key: jax.Array) -> jax.Array:
 
     return rotation
 
-    # Q, R_ = jnp.linalg.qr(R)
-    # # Ensure a right-handed coordinate system (determinant = +1)
-    # d = jnp.sign(jnp.linalg.det(Q))
-    # Q = Q * d
-    # return Q
-
 
 def penalty(x: jax.Array) -> jax.Array:
     return jnp.sum(jnp.power(jnp.maximum(jnp.abs(x) - 5.0, 0.0), 2), axis=-1)
@@ -88,7 +81,6 @@ def bernoulli_vector(dim: int, key: jax.Array) -> jax.Array:
 
 def _create_mesh(
     fn: Callable,
-    key: PRNGKeyArray,
     bounds: tuple[float, float],
     px: int,
 ):
@@ -100,9 +92,7 @@ def _create_mesh(
     Parameters
     ----------
     fn : Callable
-        BBOB function to evaluate. Should accept (x, key) parameters.
-    key : PRNGKeyArray
-        JAX random key for function evaluation.
+        BBOB function to evaluate. Should accept (x,) parameters.
     bounds : tuple[float, float]
         Min and max values for both x and y axes.
     px : int
@@ -117,8 +107,7 @@ def _create_mesh(
     X, Y = jnp.meshgrid(x_vals, x_vals)
 
     points = jnp.stack([X.ravel(), Y.ravel()], axis=-1)
-    partial_fn = partial(fn, key=key)
-    loss_values = jax.vmap(partial_fn)(points)
+    loss_values = jax.vmap(fn)(points)
     Z = loss_values.reshape(X.shape)
 
     return X, Y, Z

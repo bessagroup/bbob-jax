@@ -7,7 +7,6 @@ import jax.numpy as jnp
 import jax.random as jr
 
 # Local
-from bbob_jax._src.registry import register_function
 from bbob_jax._src.utils import (
     bernoulli_vector,
     lambda_func,
@@ -24,9 +23,12 @@ __status__ = "Stable"
 # =============================================================================
 
 
-@register_function("sphere")
 def sphere(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Sphere function (F1).
 
@@ -41,6 +43,8 @@ def sphere(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -55,9 +59,12 @@ def sphere(
     return jnp.sum(jnp.square(z))
 
 
-@register_function("ellipsoid_seperable")
 def ellipsoid_seperable(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Separable ellipsoid function (F2).
 
@@ -74,6 +81,8 @@ def ellipsoid_seperable(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -88,12 +97,15 @@ def ellipsoid_seperable(
     i = jnp.arange(1, ndim + 1, dtype=x.dtype)
     w = jnp.power(10.0, 6.0 * (i - 1) / (ndim - 1))
     z = tosz_func(x - x_opt)
-    return jnp.sum(w * z**2)
+    return jnp.sum(w * z**2) + f_opt
 
 
-@register_function("rastrigin_seperable")
 def rastrigin_seperable(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Separable Rastrigin function (F3).
 
@@ -111,6 +123,8 @@ def rastrigin_seperable(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -127,12 +141,17 @@ def rastrigin_seperable(
     temp = tosz_func(x - x_opt)
     z = jnp.matmul(alpha, tasy_func(temp, beta=0.2))
 
-    return jnp.sum(z**2 - 10.0 * jnp.cos(2.0 * jnp.pi * z) + 10.0 * ndim)
+    return (
+        jnp.sum(z**2 - 10.0 * jnp.cos(2.0 * jnp.pi * z) + 10.0 * ndim) + f_opt
+    )
 
 
-@register_function("skew_rastrigin_bueche")
 def skew_rastrigin_bueche(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Skewed Rastrigin-Bueche function (F4).
 
@@ -149,6 +168,8 @@ def skew_rastrigin_bueche(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -175,12 +196,15 @@ def skew_rastrigin_bueche(
     second_part = jnp.sum(z * z)
 
     y = first_part + second_part + 100 * penalty(x)
-    return y
+    return y + f_opt
 
 
-@register_function("linear_slope")
 def linear_slope(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Linear slope function (F5).
 
@@ -195,6 +219,8 @@ def linear_slope(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -217,12 +243,15 @@ def linear_slope(
     z = jnp.where(cond, x, x_opt)
 
     result = jnp.sum(5.0 * jnp.abs(s) - s * z)
-    return result
+    return result + f_opt
 
 
-@register_function("attractive_sector")
 def attractive_sector(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Attractive sector function (F6).
 
@@ -239,6 +268,8 @@ def attractive_sector(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -259,12 +290,15 @@ def attractive_sector(
 
     result = jnp.power(tosz_func(jnp.array([term]))[0], 0.9)
 
-    return result
+    return result + f_opt
 
 
-@register_function("step_ellipsoid")
 def step_ellipsoid(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Step ellipsoid function (F7).
 
@@ -281,6 +315,8 @@ def step_ellipsoid(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -309,12 +345,15 @@ def step_ellipsoid(
 
     # Compute final f
     result = 0.1 * jnp.maximum(jnp.abs(z_hat[0]) / 1e4, jnp.sum(mult * z**2))
-    return result + penalty(x)
+    return result + penalty(x) + f_opt
 
 
-@register_function("rosenbrock")
 def rosenbrock(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Rosenbrock function (F8).
 
@@ -331,6 +370,8 @@ def rosenbrock(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -357,12 +398,15 @@ def rosenbrock(
         axis=-1,
     )
 
-    return result
+    return result + f_opt
 
 
-@register_function("rosenbrock_rotated")
 def rosenbrock_rotated(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Rosenbrock function, rotated (F9).
 
@@ -379,6 +423,8 @@ def rosenbrock_rotated(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -405,12 +451,15 @@ def rosenbrock_rotated(
         axis=-1,
     )
 
-    return result
+    return result + f_opt
 
 
-@register_function("ellipsoid")
 def ellipsoid(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Ellipsoid function (F10).
 
@@ -427,6 +476,8 @@ def ellipsoid(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -441,12 +492,15 @@ def ellipsoid(
     idx = jnp.arange(ndim, dtype=x.dtype)
     z = tosz_func(x @ R)
     weights = 10.0 ** (6.0 * idx / (ndim - 1))
-    return jnp.sum(weights * z**2)
+    return jnp.sum(weights * z**2) + f_opt
 
 
-@register_function("discuss")
 def discuss(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Discus function (F11).
 
@@ -461,6 +515,8 @@ def discuss(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -475,12 +531,15 @@ def discuss(
     z = tosz_func(R @ (x - x_opt))
     first = 1e6 * jnp.power(z[..., 0], 2)
     second = jnp.sum(jnp.power(z[..., 1:], 2), axis=-1)
-    return first + second
+    return first + second + f_opt
 
 
-@register_function("bent_cigar")
 def bent_cigar(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Bent cigar function (F12).
 
@@ -495,6 +554,8 @@ def bent_cigar(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -507,12 +568,15 @@ def bent_cigar(
     """
     _ = x.shape[-1]
     z = R @ tasy_func(R @ (x - x_opt), beta=0.5)
-    return z[0] ** 2 + 1e6 * jnp.sum(z[1:] ** 2)
+    return z[0] ** 2 + 1e6 * jnp.sum(z[1:] ** 2) + f_opt
 
 
-@register_function("sharp_ridge")
 def sharp_ridge(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    f_opt: jax.Array,
 ) -> jax.Array:
     """Sharp ridge function (F13).
 
@@ -531,6 +595,8 @@ def sharp_ridge(
         Rotation matrix.
     Q : jax.Array
         Second rotation matrix.
+    f_opt : jax.Array
+        Optimal function value offset.
 
     Returns
     -------
@@ -540,12 +606,15 @@ def sharp_ridge(
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=10.0)
     z = Q @ lamb @ R @ (x - x_opt)
-    return z[0] ** 2 + 100.0 * jnp.sqrt(jnp.sum(z[1:] ** 2))
+    return z[0] ** 2 + 100.0 * jnp.sqrt(jnp.sum(z[1:] ** 2)) + f_opt
 
 
-@register_function("sum_of_different_powers")
 def sum_of_different_powers(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Sum of different powers function (F14).
 
@@ -562,6 +631,8 @@ def sum_of_different_powers(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -575,12 +646,15 @@ def sum_of_different_powers(
     ndim = x.shape[-1]
     z = R @ (x - x_opt)
     idx = jnp.arange(1, ndim + 1, dtype=x.dtype)
-    return jnp.sum(jnp.abs(z) ** (2 + 4 * (idx - 1) / (ndim - 1)))
+    return jnp.sum(jnp.abs(z) ** (2 + 4 * (idx - 1) / (ndim - 1))) + f_opt
 
 
-@register_function("rastrigin")
 def rastrigin(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Rastrigin function (F15).
 
@@ -596,6 +670,8 @@ def rastrigin(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -610,12 +686,17 @@ def rastrigin(
     lamb = lambda_func(ndim, alpha=10.0)
     z = R @ lamb @ Q @ tasy_func(tosz_func(R @ (x - x_opt)), beta=0.2)
 
-    return jnp.sum(z**2 - 10.0 * jnp.cos(2.0 * jnp.pi * z) + 10.0 * ndim)
+    return (
+        jnp.sum(z**2 - 10.0 * jnp.cos(2.0 * jnp.pi * z) + 10.0 * ndim) + f_opt
+    )
 
 
-@register_function("weierstrass")
 def weierstrass(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Weierstrass function (F16).
 
@@ -631,6 +712,8 @@ def weierstrass(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -659,12 +742,15 @@ def weierstrass(
     first_term = 10.0 * jnp.power((1.0 / ndim) * jnp.sum(sum1), 3)
     pen = (10.0 / ndim) * penalty(x)
 
-    return first_term + pen
+    return first_term + pen + f_opt
 
 
-@register_function("schaffer_f7_condition_10")
 def schaffer_f7_condition_10(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Schaffer F7 function with conditioning 10 (F17).
 
@@ -681,6 +767,8 @@ def schaffer_f7_condition_10(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -703,12 +791,15 @@ def schaffer_f7_condition_10(
     )
 
     result = jnp.power(term1, 2) + 10 * penalty(x)
-    return result
+    return result + f_opt
 
 
-@register_function("schaffer_f7_condition_1000")
 def schaffer_f7_condition_1000(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Schaffer F7 function with conditioning 1000 (F18).
 
@@ -725,6 +816,8 @@ def schaffer_f7_condition_1000(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -747,12 +840,15 @@ def schaffer_f7_condition_1000(
     )
 
     result = jnp.power(term1, 2) + 10 * penalty(x)
-    return result
+    return result + f_opt
 
 
-@register_function("griewank_rosenbrock_f8f2")
 def griewank_rosenbrock_f8f2(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Griewank-Rosenbrock F8F2 function (F19).
 
@@ -770,6 +866,8 @@ def griewank_rosenbrock_f8f2(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -784,12 +882,15 @@ def griewank_rosenbrock_f8f2(
     z = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0) * (R @ x) + 0.5
     s = 100 * (z[:-1] ** 2 - z[1:]) ** 2 + (z[:-1] - 1) ** 2
 
-    return (10 / (ndim - 1)) * jnp.sum((s / 4000) - jnp.cos(s)) + 10.0
+    return (10 / (ndim - 1)) * jnp.sum((s / 4000) - jnp.cos(s)) + 10.0 + f_opt
 
 
-@register_function("schwefel_xsinx")
 def schwefel_xsinx(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Schwefel x*sin(x) function (F20).
 
@@ -807,6 +908,8 @@ def schwefel_xsinx(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -840,12 +943,15 @@ def schwefel_xsinx(
     # Penalization
     pen = 100.0 * penalty(z / 100.0)
 
-    return f + 4.189828872724339 + pen
+    return f + 4.189828872724339 + pen + f_opt
 
 
-@register_function("gallagher_101_peaks")
 def gallagher_101_peaks(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Gallagher 101 peaks function (F21).
 
@@ -862,6 +968,8 @@ def gallagher_101_peaks(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -908,12 +1016,15 @@ def gallagher_101_peaks(
 
     result = jnp.power(f_tosz, 2) + penalty(x)
 
-    return result
+    return result + f_opt
 
 
-@register_function("gallagher_21_peaks")
 def gallagher_21_peaks(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Gallagher 21 peaks function (F22).
 
@@ -930,6 +1041,8 @@ def gallagher_21_peaks(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -962,7 +1075,7 @@ def gallagher_21_peaks(
 
     C /= jnp.power(alpha, 0.25)[:, None, None]
 
-    diff = x[None, :] - y
+    diff = x[None, :] - y + f_opt
 
     def apply_C(C_i, d_i, w_i):
         val = -(1.0 / (2.0 * ndim)) * d_i.T @ (R.T @ C_i @ R) @ d_i
@@ -976,12 +1089,15 @@ def gallagher_21_peaks(
 
     result = jnp.power(f_tosz, 2) + penalty(x)
 
-    return result
+    return result + f_opt
 
 
-@register_function("katsuura")
 def katsuura(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
 ) -> jax.Array:
     """Katsuura function (F23).
 
@@ -997,6 +1113,8 @@ def katsuura(
         Input array of shape (..., ndim).
     x_opt : jax.Array
         Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
     R : jax.Array
         Rotation matrix.
     Q : jax.Array
@@ -1031,12 +1149,15 @@ def katsuura(
     prod = jnp.power(prod, 10.0 / ndim**1.2)
     prod = prod * (10.0 / ndim**2.0) - (10.0 / ndim**2.0)
 
-    return prod + penalty(x)
+    return prod + penalty(x) + f_opt
 
 
-@register_function("lunacek_bi_rastrigin")
 def lunacek_bi_rastrigin(
-    x: jax.Array, x_opt: jax.Array, R: jax.Array, Q: jax.Array
+    x: jax.Array,
+    x_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    f_opt: jax.Array,
 ) -> jax.Array:
     """Lunacek bi-Rastrigin function (F24).
 
@@ -1057,6 +1178,8 @@ def lunacek_bi_rastrigin(
         Rotation matrix.
     Q : jax.Array
         Second rotation matrix.
+    f_opt : jax.Array
+        Optimal function value offset.
 
     Returns
     -------
@@ -1085,4 +1208,4 @@ def lunacek_bi_rastrigin(
 
     term2 = 10.0 * (ndim - jnp.sum(jnp.cos(2.0 * jnp.pi * z)))
 
-    return term1 + term2 + 1e4 * penalty(x)
+    return term1 + term2 + 1e4 * penalty(x) + f_opt
