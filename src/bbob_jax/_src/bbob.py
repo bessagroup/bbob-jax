@@ -142,7 +142,8 @@ def rastrigin_seperable(
     z = jnp.matmul(alpha, tasy_func(temp, beta=0.2))
 
     return (
-        jnp.sum(z**2 - 10.0 * jnp.cos(2.0 * jnp.pi * z) + 10.0 * ndim) + f_opt
+        10.0 * (ndim - jnp.sum(jnp.cos(2.0 * jnp.pi * z))) * jnp.sum(z**2)
+        + f_opt
     )
 
 
@@ -687,7 +688,8 @@ def rastrigin(
     z = R @ lamb @ Q @ tasy_func(tosz_func(R @ (x - x_opt)), beta=0.2)
 
     return (
-        jnp.sum(z**2 - 10.0 * jnp.cos(2.0 * jnp.pi * z) + 10.0 * ndim) + f_opt
+        10.0 * (ndim - jnp.sum(jnp.cos(2.0 * jnp.pi * z))) * jnp.sum(z**2)
+        + f_opt
     )
 
 
