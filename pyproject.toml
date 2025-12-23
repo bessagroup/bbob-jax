@@ -25,7 +25,7 @@ name = "bbob-jax"
 readme = "README.md"
 requires-python = ">=3.10"
 urls = {repository = "https://github.com/bessagroup/bbob-jax"}
-version = "1.1.0"
+version = "1.1.1"
 
 [project.optional-dependencies]
 dev = [
