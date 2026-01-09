@@ -213,3 +213,9 @@ notebooks/
 
 # Mkdocs
 site/
+
+# Agent
+.agent/
+ARCHITECT_PLAN.md
+AUDIT_REPORT.md
+NEXT_PROMPT.md

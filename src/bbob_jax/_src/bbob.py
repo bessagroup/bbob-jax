@@ -2,6 +2,8 @@
 # =============================================================================
 
 # Third-party
+from typing import cast
+
 import jax
 import jax.numpy as jnp
 import jax.random as jr
@@ -735,8 +737,8 @@ def weierstrass(
 
     f0 = jnp.sum((1 / 2**k) * jnp.cos(2 * jnp.pi * bk * 0.5))
 
-    def inner(z):
-        return 1 / 2**k * jnp.cos(2 * jnp.pi * bk * (z + 0.5)) - f0
+    def inner(z: jax.Array) -> jax.Array:
+        return jnp.sum(1 / 2**k * jnp.cos(2 * jnp.pi * bk * (z + 0.5))) - f0
 
     y = jax.vmap(inner)(z)
     sum1 = jnp.sum(y)
@@ -1006,7 +1008,7 @@ def gallagher_101_peaks(
 
     diff = x[None, :] - y
 
-    def apply_C(C_i, d_i, w_i):
+    def apply_C(C_i: jax.Array, d_i: jax.Array, w_i: jax.Array) -> jax.Array:
         val = -(1.0 / (2.0 * ndim)) * d_i.T @ (R.T @ C_i @ R) @ d_i
         return w_i * jnp.exp(val)
 
@@ -1079,7 +1081,7 @@ def gallagher_21_peaks(
 
     diff = x[None, :] - y + f_opt
 
-    def apply_C(C_i, d_i, w_i):
+    def apply_C(C_i: jax.Array, d_i: jax.Array, w_i: jax.Array) -> jax.Array:
         val = -(1.0 / (2.0 * ndim)) * d_i.T @ (R.T @ C_i @ R) @ d_i
         return w_i * jnp.exp(val)
 
@@ -1151,7 +1153,7 @@ def katsuura(
     prod = jnp.power(prod, 10.0 / ndim**1.2)
     prod = prod * (10.0 / ndim**2.0) - (10.0 / ndim**2.0)
 
-    return prod + penalty(x) + f_opt
+    return cast(jax.Array, prod + penalty(x) + f_opt)
 
 
 def lunacek_bi_rastrigin(

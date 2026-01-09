@@ -3,13 +3,14 @@
 
 # Standard
 from collections.abc import Callable
-from typing import Optional
+from typing import Optional, cast
 
 # Third-party
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 from jaxtyping import PRNGKeyArray
 from matplotlib.colors import LogNorm, SymLogNorm
+from mpl_toolkits.mplot3d.axes3d import Axes3D
 
 # Local
 from .utils import _create_mesh
@@ -29,7 +30,7 @@ def plot_2d(
     px: int = 300,
     ax: Optional[plt.Axes] = None,
     log_norm: bool = True,
-):
+) -> tuple[plt.Figure, plt.Axes]:
     """Plot a 2D heatmap of a BBOB function.
 
     Creates a 2D visualization of the function landscape using imshow.
@@ -62,7 +63,7 @@ def plot_2d(
     if ax is None:
         fig, ax = plt.subplots(figsize=(7, 5))
     else:
-        fig = ax.get_figure()
+        fig = cast(plt.Figure, ax.get_figure())
 
     # Choose normalization
     norm = LogNorm() if log_norm else None
@@ -90,7 +91,7 @@ def plot_3d(
     bounds: tuple[float, float] = (-5.0, 5.0),
     px: int = 300,
     ax: Optional[plt.Axes] = None,
-):
+) -> tuple[plt.Figure, plt.Axes]:
     """Plot a 3D surface of a BBOB function.
 
     Creates a 3D visualization of the function landscape with shifted z-values
@@ -123,10 +124,13 @@ def plot_3d(
         fig = plt.figure(figsize=(7, 5))
         ax = fig.add_subplot(111, projection="3d")
     else:
-        fig = ax.get_figure()
+        fig = cast(plt.Figure, ax.get_figure())
+
+    # Cast to Axes3D for 3D plotting methods
+    ax_3d = cast(Axes3D, ax)
 
     # Plot the surface
-    _ = ax.plot_surface(
+    _ = ax_3d.plot_surface(
         X,
         Y,
         Z_shifted,
@@ -140,6 +144,6 @@ def plot_3d(
     # Remove ticks for a cleaner look
     ax.set_xticks([])
     ax.set_yticks([])
-    ax.set_zticks([])
+    ax_3d.set_zticks([])
 
     return fig, ax
