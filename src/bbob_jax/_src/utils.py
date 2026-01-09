@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import cast
 
 import jax
 import jax.numpy as jnp
@@ -18,7 +19,7 @@ def xopt(key: PRNGKeyArray, ndim: int) -> jax.Array:
     return jr.uniform(key, shape=(ndim,), minval=-4.0, maxval=4.0)
 
 
-def tosz_func(x):
+def tosz_func(x: jax.Array) -> jax.Array:
     c1, c2 = 10.0, 7.9
     eps = 1e-12  # avoid log(0)
 
@@ -35,15 +36,15 @@ def tosz_func(x):
     return jnp.where(mask, transformed, x)
 
 
-def tasy_func(x: jax.Array, beta=0.5) -> jax.Array:
+def tasy_func(x: jax.Array, beta: float = 0.5) -> jax.Array:
     ndim = x.shape[-1]
     idx = jnp.arange(0, ndim)
     up = 1 + beta * ((idx - 1) / (ndim - 1)) * jnp.sqrt(jnp.abs(x))
     x_temp = jnp.abs(x) ** up
-    return jnp.where(x > 0, x_temp, x)
+    return cast(jax.Array, jnp.where(x > 0, x_temp, x))
 
 
-def lambda_func(size: int, alpha: float = 10.0) -> jax.Array:
+def lambda_func(size: int, alpha: float | jax.Array = 10.0) -> jax.Array:
     idx = jnp.arange(size, dtype=jnp.float32)
     diagonal = alpha ** (idx / (2 * (size - 1)))
     return jnp.diag(diagonal)
@@ -80,10 +81,10 @@ def bernoulli_vector(dim: int, key: jax.Array) -> jax.Array:
 
 
 def _create_mesh(
-    fn: Callable,
+    fn: Callable[[jax.Array], jax.Array],
     bounds: tuple[float, float],
     px: int,
-):
+) -> tuple[jax.Array, jax.Array, jax.Array]:
     """Create a mesh grid and evaluate function values.
 
     Generates X, Y coordinate meshes and evaluates the function at each point
