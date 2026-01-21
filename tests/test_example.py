@@ -33,7 +33,8 @@ def test_function_output(name, fn, dim):
     x = jr.uniform(key, shape=(dim,), minval=-5.0, maxval=5.0)
 
     try:
-        y = fn(ndim=dim, key=key)(x)
+        fn_func, _ = fn(ndim=dim, key=key)
+        y = fn_func(x)
     except Exception as e:
         pytest.fail(f"Function {name} raised an exception: {e}")
 
@@ -51,7 +52,8 @@ def test_function_output_jit(name, fn, dim):
     x = jr.uniform(key, shape=(dim,), minval=-5.0, maxval=5.0)
 
     try:
-        y = jax.jit(fn(ndim=dim, key=key))(x)
+        fn_func, _ = fn(ndim=dim, key=key)
+        y = jax.jit(fn_func)(x)
     except Exception as e:
         pytest.fail(f"Function {name} raised an exception: {e}")
 
@@ -67,8 +69,8 @@ def test_function_output_jit(name, fn, dim):
 def test_function_vmap(name, fn, dim, seed):
     key = jr.key(seed)
     try:
-        fn_ = fn(ndim=dim, key=key)
-        _, _, Z = _create_mesh(fn_, bounds=(-5.0, 5.0), px=300)
+        fn_func, _ = fn(ndim=dim, key=key)
+        _, _, Z = _create_mesh(fn_func, bounds=(-5.0, 5.0), px=300)
     except Exception as e:
         pytest.fail(f"Function {name} raised an exception during vmap: {e}")
 
@@ -85,8 +87,8 @@ def test_function_grad(name, fn, dim, seed):
     key_x, key_fn = jr.split(key)
     x = jr.uniform(key_x, shape=(300, dim), minval=-5.0, maxval=5.0)
     try:
-        fn_ = fn(ndim=dim, key=key_fn)
-        grad_fn = jax.grad(fn_)
+        fn_func, _ = fn(ndim=dim, key=key_fn)
+        grad_fn = jax.grad(fn_func)
         grad_value = jax.vmap(grad_fn)(x)
     except Exception as e:
         pytest.fail(

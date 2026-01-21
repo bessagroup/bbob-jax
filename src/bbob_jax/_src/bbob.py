@@ -58,7 +58,7 @@ def sphere(
         Function value(s).
     """
     z = x - x_opt
-    return jnp.sum(jnp.square(z))
+    return jnp.sum(jnp.square(z)) + f_opt
 
 
 def ellipsoid_seperable(

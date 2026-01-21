@@ -57,7 +57,8 @@ def plot_2d(
         Figure and axes objects containing the plot.
     """
 
-    X, Y, Z = _create_mesh(fn(ndim=2, key=key), bounds, px)
+    fn_instance, _ = fn(ndim=2, key=key)
+    X, Y, Z = _create_mesh(fn_instance, bounds, px)
 
     # Create a figure and axis if none provided
     if ax is None:
@@ -116,7 +117,8 @@ def plot_3d(
     tuple[plt.Figure, plt.Axes]
         Figure and 3D axes objects containing the plot.
     """
-    X, Y, Z = _create_mesh(fn(ndim=2, key=key), bounds, px)
+    fn_instance, _ = fn(ndim=2, key=key)
+    X, Y, Z = _create_mesh(fn_instance, bounds, px)
     Z_shifted = Z - jnp.min(Z)
 
     # Create a figure and axis if none provided
