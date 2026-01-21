@@ -50,7 +50,7 @@ To install the package, use pip:
 pip install bbob-jax
 ```
 
-After installation, see the full guide: [Getting Started](usage.md).
+After installation, see the full guide: [Getting Started](usage.ipynb).
 
 ## Related Work
 

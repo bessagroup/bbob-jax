@@ -46,7 +46,7 @@ __credits__ = ["Martin van der Schelling"]
 __status__ = "Stable"
 # =============================================================================
 
-BBOBFn = Callable[[jax.Array, PRNGKeyArray], jax.Array]
+BBOBFn = tuple[Callable[[jax.Array], jax.Array], jax.Array]
 
 
 def make_determinstic(
@@ -55,7 +55,7 @@ def make_determinstic(
     x_opt = jnp.zeros(ndim)
     eye = jnp.eye(ndim)
     f_opt = jnp.array(0.0)
-    return Partial(fn, x_opt=x_opt, f_opt=f_opt, R=eye, Q=eye)
+    return Partial(fn, x_opt=x_opt, f_opt=f_opt, R=eye, Q=eye), f_opt
 
 
 def make_randomized(fn: Callable, ndim: int, key: PRNGKeyArray) -> BBOBFn:
@@ -64,10 +64,10 @@ def make_randomized(fn: Callable, ndim: int, key: PRNGKeyArray) -> BBOBFn:
     R = rotation_matrix(ndim, key1)
     Q = rotation_matrix(ndim, key2)
     f_opt = fopt(key)
-    return Partial(fn, x_opt=x_opt, f_opt=f_opt, R=R, Q=Q)
+    return Partial(fn, x_opt=x_opt, f_opt=f_opt, R=R, Q=Q), f_opt
 
 
-registry: dict[str, Callable[[Callable, int, PRNGKeyArray], BBOBFn]] = {
+registry: dict[str, Callable[[int, PRNGKeyArray], BBOBFn]] = {
     "attractive_sector": Partial(make_randomized, fn=attractive_sector),
     "bent_cigar": Partial(make_randomized, fn=bent_cigar),
     "discuss": Partial(make_randomized, fn=discuss),
@@ -104,7 +104,7 @@ registry: dict[str, Callable[[Callable, int, PRNGKeyArray], BBOBFn]] = {
     "weierstrass": Partial(make_randomized, fn=weierstrass),
 }
 
-registry_original: dict[str, Callable[[Callable, int], BBOBFn]] = {
+registry_original: dict[str, Callable[[int], BBOBFn]] = {
     "attractive_sector": Partial(make_determinstic, fn=attractive_sector),
     "bent_cigar": Partial(make_determinstic, fn=bent_cigar),
     "discuss": Partial(make_determinstic, fn=discuss),
