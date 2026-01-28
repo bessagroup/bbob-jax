@@ -1,112 +1,95 @@
 import jax
 import jax.numpy as jnp
-import pandas as pd
-from bbob_jax._src.bbob import (
-    sphere,
-    ellipsoid_seperable,
-    rastrigin_seperable,
-    skew_rastrigin_bueche,
-    linear_slope,
-    attractive_sector,
-    step_ellipsoid,
-    rosenbrock,
-    rosenbrock_rotated,
-    ellipsoid,
-    discuss,
-    bent_cigar,
-    sharp_ridge,
-    sum_of_different_powers,
-    rastrigin,
-    weierstrass,
-    schaffer_f7_condition_10,
-    schaffer_f7_condition_1000,
-    griewank_rosenbrock_f8f2,
-    schwefel_xsinx,
-    gallagher_101_peaks,
-    gallagher_21_peaks,
-    katsuura,
-    lunacek_bi_rastrigin,
-)
+import jax.random as jr
+from bbob_jax._src.registry import registry_original, registry
 
 
 def verify_minima():
-    functions = {
-        "F1: Sphere": sphere,
-        "F2: Ellipsoid Separable": ellipsoid_seperable,
-        "F3: Rastrigin Separable": rastrigin_seperable,
-        "F4: Skew Rastrigin Bueche": skew_rastrigin_bueche,
-        "F5: Linear Slope": linear_slope,
-        "F6: Attractive Sector": attractive_sector,
-        "F7: Step Ellipsoid": step_ellipsoid,
-        "F8: Rosenbrock": rosenbrock,
-        "F9: Rosenbrock Rotated": rosenbrock_rotated,
-        "F10: Ellipsoid": ellipsoid,
-        "F11: Discus": discuss,
-        "F12: Bent Cigar": bent_cigar,
-        "F13: Sharp Ridge": sharp_ridge,
-        "F14: Sum of Different Powers": sum_of_different_powers,
-        "F15: Rastrigin": rastrigin,
-        "F16: Weierstrass": weierstrass,
-        "F17: Schaffer F7 Condition 10": schaffer_f7_condition_10,
-        "F18: Schaffer F7 Condition 1000": schaffer_f7_condition_1000,
-        "F19: Griewank Rosenbrock F8F2": griewank_rosenbrock_f8f2,
-        "F20: Schwefel x*sin(x)": schwefel_xsinx,
-        "F21: Gallagher 101 Peaks": gallagher_101_peaks,
-        "F22: Gallagher 21 Peaks": gallagher_21_peaks,
-        "F23: Katsuura": katsuura,
-        "F24: Lunacek bi-Rastrigin": lunacek_bi_rastrigin,
-    }
+    dims = [2, 3, 5, 10, 20, 40, 50, 100]
+    print(f"Verifying global minima for dimensions: {dims}")
+    print("=" * 80)
 
-    ndim = 5
-    x = jnp.zeros(ndim)
-    x_opt = jnp.zeros(ndim)
-    f_opt = 0.0
-    R = jnp.eye(ndim)
-    Q = jnp.eye(ndim)
+    failures = []
 
-    results = []
+    # 1. Deterministic Verification
+    print("\n[Part 1] Deterministic Functions (x_opt=0, f_opt=0)")
+    print("-" * 60)
+    for ndim in dims:
+        print(f"Checking dimension {ndim}...")
+        for name, factory in sorted(registry_original.items()):
+            try:
+                fn_instance, f_opt = factory(ndim=ndim)
+                # x_opt should be zeros
+                x_test = jnp.zeros(ndim)
+                val = fn_instance(x_test)
 
-    print(f"{'Function':<30} | {'Value at 0':<15} | {'Status':<10}")
-    print("-" * 65)
+                is_val_zero = jnp.isclose(val, 0.0, atol=1e-5)
 
-    special_signatures = {"F13: Sharp Ridge", "F24: Lunacek bi-Rastrigin"}
+                if not is_val_zero:
+                    print(
+                        f"[FAIL] {name:<30} (D={ndim}) val={val:.2e} (expected 0.0)"
+                    )
+                    failures.append((f"{name}_det_d{ndim}", val))
+            except Exception as e:
+                print(f"[ERROR] {name:<30} (D={ndim}) {e}")
+                failures.append((f"{name}_det_d{ndim}", str(e)))
 
-    ignored_functions = {
-        "F5: Linear Slope",
-        "F9: Rosenbrock Rotated",
-        "F19: Griewank Rosenbrock F8F2",
-        "F20: Schwefel x*sin(x)",
-        "F21: Gallagher 101 Peaks",
-        "F22: Gallagher 21 Peaks",
-        "F24: Lunacek bi-Rastrigin",
-    }
+    # 2. Randomized Verification
+    print("\n[Part 2] Randomized Functions (x_opt=random, f_opt=random)")
+    print("-" * 60)
 
-    for name, func in functions.items():
-        if name in ignored_functions:
-            continue
+    key_root = jr.key(42)
 
-        try:
-            if name in special_signatures:
-                # (x, x_opt, R, Q, f_opt)
-                val = func(x, x_opt, R, Q, f_opt)
-            else:
-                # (x, x_opt, f_opt, R, Q)
-                val = func(x, x_opt, f_opt, R, Q)
+    for ndim in dims:
+        print(f"Checking dimension {ndim}...")
+        key_dim = jr.fold_in(key_root, ndim)
 
-            val_scalar = float(val)
-            is_zero = jnp.allclose(val, 0.0, atol=1e-6)
-            status = "PASS" if is_zero else "FAIL"
+        for name, factory in sorted(registry.items()):
+            try:
+                # Factory signature for randomized: (ndim, key)
+                # But registry entries are Partial(make_randomized, fn=...)
+                # so we call them with (ndim=ndim, key=key)
 
-            results.append(
-                {"Function": name, "Value": val_scalar, "Status": status}
-            )
+                # Use explicit enumeration for stable seeds that fit in uint32
+                seed_offset = abs(hash(name)) % (2**32 - 1)
+                key_fn = jr.fold_in(key_dim, seed_offset)
 
-            print(f"{name:<30} | {val_scalar:<15.6f} | {status:<10}")
-        except Exception as e:
-            results.append(
-                {"Function": name, "Value": str(e), "Status": "ERROR"}
-            )
-            print(f"{name:<30} | {'ERROR':<15} | {str(e)}")
+                fn_instance, f_opt_expected = factory(ndim=ndim, key=key_fn)
+
+                # Extract x_opt from partial keywords
+                if "x_opt" not in fn_instance.keywords:
+                    # Should not happen for our make_randomized setup
+                    raise ValueError(f"Could not find x_opt in {name}")
+
+                x_opt = fn_instance.keywords["x_opt"]
+
+                # Evaluate
+                val = fn_instance(x_opt)
+
+                # Check absolute difference
+                diff = jnp.abs(val - f_opt_expected)
+                # Tolerance might need to be slightly looser for high dimensions / complex functions
+                is_close = jnp.allclose(val, f_opt_expected, atol=1e-4)
+
+                if not is_close:
+                    print(
+                        f"[FAIL] {name:<30} (D={ndim}) diff={diff:.2e} (val={val:.2e}, exp={f_opt_expected:.2e})"
+                    )
+                    failures.append((f"{name}_rnd_d{ndim}", diff))
+
+            except Exception as e:
+                print(f"[ERROR] {name:<30} (D={ndim}) {e}")
+                failures.append((f"{name}_rnd_d{ndim}", str(e)))
+
+    print("=" * 80)
+    if failures:
+        print(f"FAILED: {len(failures)} checks failed.")
+        for name, val in failures:
+            print(f"  - {name}: {val}")
+        exit(1)
+    else:
+        print("SUCCESS: All verification checks passed.")
+        exit(0)
 
 
 if __name__ == "__main__":

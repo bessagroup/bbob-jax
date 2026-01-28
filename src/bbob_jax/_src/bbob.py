@@ -441,7 +441,7 @@ def rosenbrock_rotated(
     ndim = x.shape[-1]
     zmax = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0)
 
-    z = zmax * (x @ R) + 0.5
+    z = zmax * ((x - x_opt) @ R) + 0.5
 
     # Create unshifted and shifted arrays along last axis
     unshift = z[..., :-1]  # all except last
@@ -493,7 +493,7 @@ def ellipsoid(
     """
     ndim = x.shape[-1]
     idx = jnp.arange(ndim, dtype=x.dtype)
-    z = tosz_func(x @ R)
+    z = tosz_func((x - x_opt) @ R)
     weights = 10.0 ** (6.0 * idx / (ndim - 1))
     return jnp.sum(weights * z**2) + f_opt
 
@@ -883,7 +883,7 @@ def griewank_rosenbrock_f8f2(
         Function value(s).
     """
     ndim = x.shape[-1]
-    z = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0) * (R @ x) + 0.5
+    z = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0) * (R @ (x - x_opt)) + 0.5
     s = 100 * (z[:-1] ** 2 - z[1:]) ** 2 + (z[:-1] - 1) ** 2
 
     return (10 / (ndim - 1)) * jnp.sum((s / 4000) - jnp.cos(s)) + 10.0 + f_opt
@@ -929,14 +929,21 @@ def schwefel_xsinx(
     key = jr.fold_in(key, Q[0, 0])
     ones = bernoulli_vector(ndim, key)
     lamb = lambda_func(ndim, alpha=10.0)
-    x_hat = 2.0 * ones * x
-    x_opt = 4.2096874633 / 2 * ones
+
+    x_opt_shape = 4.2096874633 / 2 * ones
+
+    # helper for shift
+    x_trans = x - x_opt + x_opt_shape
+    x_hat = 2.0 * ones * x_trans
 
     z_hat = x_hat.at[..., 1:].add(
-        0.25 * (x_hat[..., :-1] - 2.0 * jnp.abs(x_opt[..., :-1]))
+        0.25 * (x_hat[..., :-1] - 2.0 * jnp.abs(x_opt_shape[..., :-1]))
     )
 
-    z = 100.0 * (lamb @ (z_hat - 2.0 * jnp.abs(x_opt)) + 2.0 * jnp.abs(x_opt))
+    z = 100.0 * (
+        lamb @ (z_hat - 2.0 * jnp.abs(x_opt_shape))
+        + 2.0 * jnp.abs(x_opt_shape)
+    )
 
     f = (
         -1.0
@@ -999,7 +1006,6 @@ def gallagher_101_peaks(
     alpha = jnp.concatenate([jnp.array([1000.0]), alpha])
 
     y = jr.uniform(key2, shape=(*i.shape, ndim), minval=-5.0, maxval=5.0)
-    x_opt = jr.uniform(key, shape=(ndim,), minval=-4.0, maxval=4.0)
     y = y.at[0].set(x_opt)
 
     C = jax.vmap(lambda_func, in_axes=(None, 0))(ndim, alpha)
@@ -1072,14 +1078,13 @@ def gallagher_21_peaks(
     alpha = jnp.concatenate([jnp.array([1000.0**2]), alpha])
 
     y = jr.uniform(key2, shape=(*i.shape, ndim), minval=-4.9, maxval=4.9)
-    x_opt = jr.uniform(key, shape=(ndim,), minval=-3.92, maxval=3.92)
     y = y.at[0].set(x_opt)
 
     C = jax.vmap(lambda_func, in_axes=(None, 0))(ndim, alpha)
 
     C /= jnp.power(alpha, 0.25)[:, None, None]
 
-    diff = x[None, :] - y + f_opt
+    diff = x[None, :] - y
 
     def apply_C(C_i: jax.Array, d_i: jax.Array, w_i: jax.Array) -> jax.Array:
         val = -(1.0 / (2.0 * ndim)) * d_i.T @ (R.T @ C_i @ R) @ d_i
@@ -1197,8 +1202,10 @@ def lunacek_bi_rastrigin(
     d = 1.0
     s = 1.0 - 1.0 / (2.0 * jnp.sqrt(ndim + 20.0) - 8.2)
 
-    x_opt = (mu0 / 2.0) * bernoulli_vector(ndim, key)
-    x_hat = 2 * jnp.sign(x_opt) * x
+    x_opt_shape = (mu0 / 2.0) * bernoulli_vector(ndim, key)
+    # Shift x so that x_opt corresponds to x_opt_shape in the transformed space
+    x_trans = x - x_opt + x_opt_shape
+    x_hat = 2 * jnp.sign(x_opt_shape) * x_trans
 
     lamb = lambda_func(ndim, alpha=100.0)
     z = Q @ lamb @ R @ (x_hat - mu0 * jnp.ones_like(x))
