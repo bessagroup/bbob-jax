@@ -37,6 +37,33 @@ from bbob_jax._src.bbob import (
     sum_of_different_powers,
     weierstrass,
 )
+from bbob_jax._src.cec2005 import (
+    f1,
+    f2,
+    f3,
+    f4,
+    f5,
+    f6,
+    f7,
+    f8,
+    f9,
+    f10,
+    f11,
+    f12,
+    f13,
+    f14,
+    f15,
+    f16,
+    f17,
+    f18,
+    f19,
+    f20,
+    f21,
+    f22,
+    f23,
+    f24,
+    f25,
+)
 from bbob_jax._src.utils import fopt, rotation_matrix, xopt
 
 #                                                          Authorship & Credits
@@ -141,4 +168,134 @@ registry_original: dict[str, Callable[[int], BBOBFn]] = {
         make_determinstic, fn=sum_of_different_powers
     ),
     "weierstrass": Partial(make_determinstic, fn=weierstrass),
+}
+
+
+def make_randomized_cec2005(
+    fn: Callable, ndim: int, key: PRNGKeyArray, num_components: int = 1
+) -> BBOBFn:
+    """Factory for CEC 2005 functions with seed-generated parameters.
+
+    Always splits key into 2*num_components+2 subkeys so x_opt, R, Q,
+    and f_opt consume distinct subkeys (avoids the BBOB key-reuse pattern).
+    """
+    total_keys = 2 * num_components + 2
+    keys = jr.split(key, total_keys)
+    # keys[0:num_components]              → R matrices
+    # keys[num_components:2*num_components] → Q matrices
+    # keys[-2]                            → x_opt seed
+    # keys[-1]                            → f_opt seed
+
+    if num_components == 1:
+        x_opt = jr.uniform(
+            keys[-2], shape=(ndim,), minval=-100.0, maxval=100.0
+        )
+        R = rotation_matrix(ndim, keys[0])
+        Q = rotation_matrix(ndim, keys[num_components])
+    else:
+        xopt_keys = jr.split(keys[-2], num_components)
+        x_opt = jnp.stack(
+            [
+                jr.uniform(
+                    xopt_keys[i], shape=(ndim,), minval=-100.0, maxval=100.0
+                )
+                for i in range(num_components)
+            ]
+        )
+        R = jnp.stack(
+            [rotation_matrix(ndim, keys[i]) for i in range(num_components)]
+        )
+        Q = jnp.stack(
+            [
+                rotation_matrix(ndim, keys[num_components + i])
+                for i in range(num_components)
+            ]
+        )
+
+    f_opt_val = fopt(keys[-1])
+    return Partial(fn, x_opt=x_opt, f_opt=f_opt_val, R=R, Q=Q), f_opt_val
+
+
+def make_deterministic_cec2005(
+    fn: Callable,
+    ndim: int,
+    key: PRNGKeyArray | None = None,
+    num_components: int = 1,
+) -> BBOBFn:
+    """Factory for CEC 2005 functions with zero shift and identity rotations.
+
+    key is accepted and ignored so both registries have identical signatures.
+    """
+    f_opt_val = jnp.array(0.0)
+    if num_components == 1:
+        x_opt = jnp.zeros(ndim)
+        eye = jnp.eye(ndim)
+        return Partial(
+            fn, x_opt=x_opt, f_opt=f_opt_val, R=eye, Q=eye
+        ), f_opt_val
+    else:
+        x_opt = jnp.zeros((num_components, ndim))
+        eyes = jnp.stack([jnp.eye(ndim)] * num_components)
+        return (
+            Partial(fn, x_opt=x_opt, f_opt=f_opt_val, R=eyes, Q=eyes),
+            f_opt_val,
+        )
+
+
+_NC = 10  # num_components for all composition functions (F15-F25)
+
+cec2005_registry: dict[str, Callable] = {
+    "f1": Partial(make_randomized_cec2005, fn=f1, num_components=1),
+    "f2": Partial(make_randomized_cec2005, fn=f2, num_components=1),
+    "f3": Partial(make_randomized_cec2005, fn=f3, num_components=1),
+    "f4": Partial(make_randomized_cec2005, fn=f4, num_components=1),
+    "f5": Partial(make_randomized_cec2005, fn=f5, num_components=1),
+    "f6": Partial(make_randomized_cec2005, fn=f6, num_components=1),
+    "f7": Partial(make_randomized_cec2005, fn=f7, num_components=1),
+    "f8": Partial(make_randomized_cec2005, fn=f8, num_components=1),
+    "f9": Partial(make_randomized_cec2005, fn=f9, num_components=1),
+    "f10": Partial(make_randomized_cec2005, fn=f10, num_components=1),
+    "f11": Partial(make_randomized_cec2005, fn=f11, num_components=1),
+    "f12": Partial(make_randomized_cec2005, fn=f12, num_components=1),
+    "f13": Partial(make_randomized_cec2005, fn=f13, num_components=1),
+    "f14": Partial(make_randomized_cec2005, fn=f14, num_components=1),
+    "f15": Partial(make_randomized_cec2005, fn=f15, num_components=_NC),
+    "f16": Partial(make_randomized_cec2005, fn=f16, num_components=_NC),
+    "f17": Partial(make_randomized_cec2005, fn=f17, num_components=_NC),
+    "f18": Partial(make_randomized_cec2005, fn=f18, num_components=_NC),
+    "f19": Partial(make_randomized_cec2005, fn=f19, num_components=_NC),
+    "f20": Partial(make_randomized_cec2005, fn=f20, num_components=_NC),
+    "f21": Partial(make_randomized_cec2005, fn=f21, num_components=_NC),
+    "f22": Partial(make_randomized_cec2005, fn=f22, num_components=_NC),
+    "f23": Partial(make_randomized_cec2005, fn=f23, num_components=_NC),
+    "f24": Partial(make_randomized_cec2005, fn=f24, num_components=_NC),
+    "f25": Partial(make_randomized_cec2005, fn=f25, num_components=_NC),
+}
+
+cec2005_registry_original: dict[str, Callable] = {
+    "f1": Partial(make_deterministic_cec2005, fn=f1, num_components=1),
+    "f2": Partial(make_deterministic_cec2005, fn=f2, num_components=1),
+    "f3": Partial(make_deterministic_cec2005, fn=f3, num_components=1),
+    "f4": Partial(make_deterministic_cec2005, fn=f4, num_components=1),
+    "f5": Partial(make_deterministic_cec2005, fn=f5, num_components=1),
+    "f6": Partial(make_deterministic_cec2005, fn=f6, num_components=1),
+    "f7": Partial(make_deterministic_cec2005, fn=f7, num_components=1),
+    "f8": Partial(make_deterministic_cec2005, fn=f8, num_components=1),
+    "f9": Partial(make_deterministic_cec2005, fn=f9, num_components=1),
+    "f10": Partial(make_deterministic_cec2005, fn=f10, num_components=1),
+    "f11": Partial(make_deterministic_cec2005, fn=f11, num_components=1),
+    "f12": Partial(make_deterministic_cec2005, fn=f12, num_components=1),
+    "f13": Partial(make_deterministic_cec2005, fn=f13, num_components=1),
+    "f14": Partial(make_deterministic_cec2005, fn=f14, num_components=1),
+    "f15": Partial(make_deterministic_cec2005, fn=f15, num_components=_NC),
+    "f16": Partial(make_deterministic_cec2005, fn=f16, num_components=_NC),
+    "f17": Partial(make_deterministic_cec2005, fn=f17, num_components=_NC),
+    "f18": Partial(make_deterministic_cec2005, fn=f18, num_components=_NC),
+    "f19": Partial(make_deterministic_cec2005, fn=f19, num_components=_NC),
+    "f20": Partial(make_deterministic_cec2005, fn=f20, num_components=_NC),
+    "f21": Partial(make_deterministic_cec2005, fn=f21, num_components=_NC),
+    "f22": Partial(make_deterministic_cec2005, fn=f22, num_components=_NC),
+    "f23": Partial(make_deterministic_cec2005, fn=f23, num_components=_NC),
+    "f24": Partial(make_deterministic_cec2005, fn=f24, num_components=_NC),
+    "f25": Partial(make_deterministic_cec2005, fn=f25, num_components=_NC),
 }

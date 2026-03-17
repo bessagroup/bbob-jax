@@ -32,7 +32,13 @@ from bbob_jax._src.bbob import (
     sum_of_different_powers,
     weierstrass,
 )
-from bbob_jax._src.registry import registry, registry_original
+from bbob_jax._src.cec2005_tags import cec2005_function_characteristics
+from bbob_jax._src.registry import (
+    cec2005_registry,
+    cec2005_registry_original,
+    registry,
+    registry_original,
+)
 from bbob_jax._src.tags import function_characteristics
 
 #                                                        Authorship and Credits
@@ -48,6 +54,9 @@ __all__ = [
     "registry",
     "registry_original",
     "function_characteristics",
+    "cec2005_registry",
+    "cec2005_registry_original",
+    "cec2005_function_characteristics",
     "bbob",
     "attractive_sector",
     "bent_cigar",
