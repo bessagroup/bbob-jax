@@ -11,6 +11,7 @@ Criteria for the CEC 2005 Special Session on Real-Parameter Optimization."
 """
 
 import jax
+import jax.numpy as jnp
 
 __author__ = "Martin van der Schelling (M.P.vanderSchelling@tudelft.nl)"
 __credits__ = ["Martin van der Schelling"]
@@ -24,7 +25,9 @@ def f1(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F1: Shifted Sphere. Minimum f_opt at x_opt."""
+    z = x - x_opt
+    return jnp.sum(z**2) + f_opt
 
 
 def f2(
@@ -34,7 +37,9 @@ def f2(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F2: Shifted Schwefel's Problem 1.2. Minimum f_opt at x_opt."""
+    z = x - x_opt
+    return jnp.sum(jnp.cumsum(z) ** 2) + f_opt
 
 
 def f3(
@@ -44,7 +49,13 @@ def f3(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F3: Shifted Rotated High Conditioned Elliptic. Minimum f_opt at x_opt.
+    R is the rotation matrix. Q is unused."""
+    ndim = x.shape[-1]
+    z = R @ (x - x_opt)
+    exponents = jnp.arange(ndim, dtype=jnp.float32) / jnp.maximum(ndim - 1, 1)
+    coeffs = 10.0 ** (6.0 * exponents)
+    return jnp.sum(coeffs * z**2) + f_opt
 
 
 def f4(
@@ -54,7 +65,14 @@ def f4(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F4: Shifted Schwefel 1.2 (noise omitted for jax.grad compatibility).
+
+    The official CEC 2005 F4 adds Gaussian noise: f(x) * (1 + 0.4*N(0,1)).
+    Noise is omitted here. noise_omitted=True in
+    cec2005_function_characteristics.
+    """
+    z = x - x_opt
+    return jnp.sum(jnp.cumsum(z) ** 2) + f_opt
 
 
 def f5(
@@ -64,7 +82,17 @@ def f5(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F5: Schwefel's Problem 2.6 with Global Optimum on Bounds.
+
+    R is repurposed as the A matrix (n x n). x_opt is the global optimum
+    (±5 per dim in the original; here sampled from [-100, 100] — parameters
+    are seed-generated, not from official CEC 2005 data files).
+
+    f(x) = max_i(|sum_j(A_ij * x_j) - b_i|) where b = A @ x_opt
+          = max(|R @ (x - x_opt)|)
+    """
+    diff = R @ (x - x_opt)
+    return jnp.max(jnp.abs(diff)) + f_opt
 
 
 def f6(
@@ -74,7 +102,13 @@ def f6(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F6: Shifted Rosenbrock's. Minimum f_opt at x_opt.
+    Shift is x - x_opt + 1 to place valley at x_opt."""
+    z = x - x_opt + 1.0
+    return (
+        jnp.sum(100.0 * (z[:-1] ** 2 - z[1:]) ** 2 + (z[:-1] - 1.0) ** 2)
+        + f_opt
+    )
 
 
 def f7(
@@ -84,7 +118,12 @@ def f7(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F7: Shifted Rotated Griewank's without Bounds. Minimum f_opt at
+    x_opt."""
+    from bbob_jax._src.utils import griewank
+
+    z = R @ (x - x_opt)
+    return griewank(z) + f_opt
 
 
 def f8(
@@ -94,7 +133,12 @@ def f8(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F8: Shifted Rotated Ackley's with Global Optimum on Bounds.
+    R is the rotation matrix; Q is unused."""
+    from bbob_jax._src.utils import ackley
+
+    z = R @ (x - x_opt)
+    return ackley(z) + f_opt
 
 
 def f9(
@@ -104,7 +148,9 @@ def f9(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F9: Shifted Rastrigin's. Minimum f_opt at x_opt."""
+    z = x - x_opt
+    return jnp.sum(z**2 - 10.0 * jnp.cos(2.0 * jnp.pi * z) + 10.0) + f_opt
 
 
 def f10(
@@ -114,7 +160,9 @@ def f10(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F10: Shifted Rotated Rastrigin's. Minimum f_opt at x_opt."""
+    z = R @ (x - x_opt)
+    return jnp.sum(z**2 - 10.0 * jnp.cos(2.0 * jnp.pi * z) + 10.0) + f_opt
 
 
 def f11(
@@ -124,7 +172,11 @@ def f11(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F11: Shifted Rotated Weierstrass. Minimum f_opt at x_opt."""
+    from bbob_jax._src.utils import cec2005_weierstrass
+
+    z = R @ (x - x_opt)
+    return cec2005_weierstrass(z) + f_opt
 
 
 def f12(
@@ -134,7 +186,20 @@ def f12(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F12: Schwefel's Problem 2.13.
+
+    R is repurposed as the 'a' matrix (n x n), Q as the 'b' matrix (n x n).
+    x_opt stores the alpha vector (optimal solution).
+
+    A_i = sum_j(a_ij * sin(alpha_j) + b_ij * cos(alpha_j))
+    B_i(x) = sum_j(a_ij * sin(x_j) + b_ij * cos(x_j))
+    f(x) = sum_i((A_i - B_i(x))^2) + f_opt
+    """
+    A = jnp.sum(
+        R * jnp.sin(x_opt)[None, :] + Q * jnp.cos(x_opt)[None, :], axis=-1
+    )
+    B = jnp.sum(R * jnp.sin(x)[None, :] + Q * jnp.cos(x)[None, :], axis=-1)
+    return jnp.sum((A - B) ** 2) + f_opt
 
 
 def f13(
@@ -144,7 +209,20 @@ def f13(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F13: Expanded Extended Griewank's plus Rosenbrock's F8F2.
+
+    Applies g(rosenbrock(x_i, x_{i+1})) cyclically, where g is the 1D Griewank.
+    x_opt shifts the input. R and Q are unused.
+    """
+    z = x - x_opt
+    zi = z[:-1]
+    zi1 = z[1:]
+    rosen_vals = 100.0 * (zi**2 - zi1) ** 2 + (zi - 1.0) ** 2
+    rosen_last = 100.0 * (z[-1] ** 2 - z[0]) ** 2 + (z[-1] - 1.0) ** 2
+    rosen_all = jnp.concatenate([rosen_vals, jnp.array([rosen_last])])
+    # 1D Griewank: g(y) = y^2/4000 - cos(y) + 1
+    g_vals = rosen_all**2 / 4000.0 - jnp.cos(rosen_all) + 1.0
+    return jnp.sum(g_vals) + f_opt
 
 
 def f14(
@@ -154,7 +232,16 @@ def f14(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F14: Shifted Rotated Expanded Scaffer's F6.
+
+    Applies Scaffer F6 to consecutive pairs (z_i, z_{i+1}) cyclically.
+    """
+    from bbob_jax._src.utils import scaffer_f6
+
+    z = R @ (x - x_opt)
+    pairs_val = jax.vmap(scaffer_f6)(z[:-1], z[1:])
+    last_val = scaffer_f6(z[-1], z[0])
+    return jnp.sum(pairs_val) + last_val + f_opt
 
 
 def f15(
