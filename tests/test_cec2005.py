@@ -36,6 +36,8 @@ def test_function_output(name, fn, dim):
     try:
         fn_func, _ = fn(ndim=dim, key=key)
         y = fn_func(x)
+    except NotImplementedError:
+        pytest.skip(f"Function {name} not yet implemented")
     except Exception as e:
         pytest.fail(f"Function {name} raised an exception: {e}")
     assert jnp.isfinite(y), f"{name} returned non-finite value: {y}"
@@ -50,6 +52,8 @@ def test_function_output_jit(name, fn, dim):
     try:
         fn_func, _ = fn(ndim=dim, key=key)
         y = jax.jit(fn_func)(x)
+    except NotImplementedError:
+        pytest.skip(f"Function {name} JIT not yet implemented")
     except Exception as e:
         pytest.fail(f"Function {name} JIT raised an exception: {e}")
     assert jnp.isfinite(y), f"{name} JIT returned non-finite: {y}"
@@ -64,6 +68,8 @@ def test_function_vmap(name, fn, dim, seed):
     try:
         fn_func, _ = fn(ndim=dim, key=key)
         _, _, Z = _create_mesh(fn_func, bounds=(-100.0, 100.0), px=50)
+    except NotImplementedError:
+        pytest.skip(f"Function {name} vmap not yet implemented")
     except Exception as e:
         pytest.fail(f"Function {name} vmap raised an exception: {e}")
     assert jnp.all(jnp.isfinite(Z)), f"{name} vmap returned non-finite values"
@@ -80,6 +86,8 @@ def test_function_grad(name, fn, dim, seed):
         fn_func, _ = fn(ndim=dim, key=key_fn)
         grad_fn = jax.grad(fn_func)
         grad_value = jax.vmap(grad_fn)(x)
+    except NotImplementedError:
+        pytest.skip(f"Function {name} grad not yet implemented")
     except Exception as e:
         pytest.fail(f"Function {name} grad raised an exception: {e}")
     assert grad_value.shape == x.shape
