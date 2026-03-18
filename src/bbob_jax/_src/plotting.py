@@ -13,7 +13,6 @@ from matplotlib.colors import LogNorm, SymLogNorm
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
 # Local
-from .bounds import BBOB_BOUNDS
 from .utils import _create_mesh
 
 #                                                          Authorship & Credits
@@ -27,7 +26,7 @@ __status__ = "Stable"
 def plot_2d(
     fn: Callable,
     key: PRNGKeyArray,
-    bounds: tuple[float, float] | None = None,
+    bounds: tuple[float, float] = (-5.0, 5.0),
     px: int = 300,
     ax: Optional[plt.Axes] = None,
     log_norm: bool = True,
@@ -42,10 +41,8 @@ def plot_2d(
         BBOB function to plot. Should accept (x, key) parameters.
     key : PRNGKeyArray
         JAX random key for function evaluation.
-    bounds : tuple[float, float] | None, optional
-        Min and max values for both x and y axes. Defaults to BBOB_BOUNDS
-        (-5.0, 5.0) when None. Pass ``cec2005_bounds[name]`` for CEC 2005
-        functions.
+    bounds : tuple[float, float], optional
+        Min and max values for both x and y axes, by default (-5.0, 5.0).
     px : int, optional
         Number of pixels per axis (resolution), by default 300.
     ax : Optional[plt.Axes], optional
@@ -60,8 +57,6 @@ def plot_2d(
         Figure and axes objects containing the plot.
     """
 
-    if bounds is None:
-        bounds = BBOB_BOUNDS
     fn_instance, _ = fn(ndim=2, key=key)
     X, Y, Z = _create_mesh(fn_instance, bounds, px)
 
@@ -94,7 +89,7 @@ def plot_2d(
 def plot_3d(
     fn: Callable,
     key: PRNGKeyArray,
-    bounds: tuple[float, float] | None = None,
+    bounds: tuple[float, float] = (-5.0, 5.0),
     px: int = 300,
     ax: Optional[plt.Axes] = None,
 ) -> tuple[plt.Figure, plt.Axes]:
@@ -109,10 +104,8 @@ def plot_3d(
         BBOB function to plot. Should accept (x, key) parameters.
     key : PRNGKeyArray
         JAX random key for function evaluation.
-    bounds : tuple[float, float] | None, optional
-        Min and max values for both x and y axes. Defaults to BBOB_BOUNDS
-        (-5.0, 5.0) when None. Pass ``cec2005_bounds[name]`` for CEC 2005
-        functions.
+    bounds : tuple[float, float], optional
+        Min and max values for both x and y axes, by default (-5.0, 5.0).
     px : int, optional
         Number of pixels per axis (resolution), by default 300.
     ax : Optional[plt.Axes], optional
@@ -124,8 +117,6 @@ def plot_3d(
     tuple[plt.Figure, plt.Axes]
         Figure and 3D axes objects containing the plot.
     """
-    if bounds is None:
-        bounds = BBOB_BOUNDS
     fn_instance, _ = fn(ndim=2, key=key)
     X, Y, Z = _create_mesh(fn_instance, bounds, px)
     Z_shifted = Z - jnp.min(Z)
