@@ -87,12 +87,14 @@ def make_determinstic(
 
 def make_randomized(fn: Callable, ndim: int, key: PRNGKeyArray) -> BBOBFn:
     key1, key2 = jr.split(key)
-    x_opt = xopt(key1, ndim)
+    x_opt = xopt(key=key1, ndim=ndim, minval=-4.0, maxval=4.0)
     R = rotation_matrix(ndim, key1)
     Q = rotation_matrix(ndim, key2)
     f_opt = fopt(key)
     return Partial(fn, x_opt=x_opt, f_opt=f_opt, R=R, Q=Q), f_opt
 
+
+# =============================================================================
 
 registry: dict[str, Callable[[int, PRNGKeyArray], BBOBFn]] = {
     "attractive_sector": Partial(make_randomized, fn=attractive_sector),
@@ -187,18 +189,14 @@ def make_randomized_cec2005(
     # keys[-1]                            → f_opt seed
 
     if num_components == 1:
-        x_opt = jr.uniform(
-            keys[-2], shape=(ndim,), minval=-100.0, maxval=100.0
-        )
+        x_opt = xopt(key=keys[-2], ndim=ndim, minval=-100.0, maxval=100.0)
         R = rotation_matrix(ndim, keys[0])
         Q = rotation_matrix(ndim, keys[num_components])
     else:
         xopt_keys = jr.split(keys[-2], num_components)
         x_opt = jnp.stack(
             [
-                jr.uniform(
-                    xopt_keys[i], shape=(ndim,), minval=-100.0, maxval=100.0
-                )
+                xopt(key=xopt_keys[i], ndim=ndim, minval=-100.0, maxval=100.0)
                 for i in range(num_components)
             ]
         )

@@ -14,9 +14,13 @@ def fopt(key: PRNGKeyArray) -> jax.Array:
     )
 
 
-def xopt(key: PRNGKeyArray, ndim: int) -> jax.Array:
-    """Generate a random optimal solution x_opt within [-4, 4]^ndim."""
-    return jr.uniform(key, shape=(ndim,), minval=-4.0, maxval=4.0)
+def xopt(
+    key: PRNGKeyArray, ndim: int, minval: float, maxval: float
+) -> jax.Array:
+    """
+    Generate a random optimal solution x_opt within [minval, maxval]^ndim.
+    """
+    return jr.uniform(key, shape=(ndim,), minval=minval, maxval=maxval)
 
 
 def tosz_func(x: jax.Array) -> jax.Array:

@@ -15,6 +15,14 @@ from collections.abc import Callable
 import jax
 import jax.numpy as jnp
 
+from bbob_jax._src.utils import (
+    ackley,
+    cec2005_weierstrass,
+    griewank,
+    hybrid_composition,
+    scaffer_f6,
+)
+
 __author__ = "Martin van der Schelling (M.P.vanderSchelling@tudelft.nl)"
 __credits__ = ["Martin van der Schelling"]
 __status__ = "Stable"
@@ -27,7 +35,31 @@ def f1(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F1: Shifted Sphere. Minimum f_opt at x_opt."""
+    """Shifted Sphere function (F1).
+
+    Simple unimodal function with global optimum at x_opt.
+
+    ![F1 3D surface](img/3d/f1.png){ width=30% }
+    ![F1 2D surface](img/2d/f1.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix (unused).
+    Q : jax.Array
+        Second rotation matrix (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     z = x - x_opt
     return jnp.sum(z**2) + f_opt
 
@@ -39,7 +71,31 @@ def f2(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F2: Shifted Schwefel's Problem 1.2. Minimum f_opt at x_opt."""
+    """Shifted Schwefel's Problem 1.2 (F2).
+
+    Unimodal function with non-separable variables via cumulative sum.
+
+    ![F2 3D surface](img/3d/f2.png){ width=30% }
+    ![F2 2D surface](img/2d/f2.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix (unused).
+    Q : jax.Array
+        Second rotation matrix (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     z = x - x_opt
     return jnp.sum(jnp.cumsum(z) ** 2) + f_opt
 
@@ -51,8 +107,31 @@ def f3(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F3: Shifted Rotated High Conditioned Elliptic. Minimum f_opt at x_opt.
-    R is the rotation matrix. Q is unused."""
+    """Shifted Rotated High Conditioned Elliptic function (F3).
+
+    Unimodal function with high conditioning and rotation applied.
+
+    ![F3 3D surface](img/3d/f3.png){ width=30% }
+    ![F3 2D surface](img/2d/f3.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     z = R @ (x - x_opt)
     exponents = jnp.arange(ndim, dtype=jnp.float32) / jnp.maximum(ndim - 1, 1)
@@ -67,11 +146,33 @@ def f4(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F4: Shifted Schwefel 1.2 (noise omitted for jax.grad compatibility).
+    """Shifted Schwefel 1.2 with Noise (F4).
 
-    The official CEC 2005 F4 adds Gaussian noise: f(x) * (1 + 0.4*N(0,1)).
-    Noise is omitted here. noise_omitted=True in
-    cec2005_function_characteristics.
+    Noise-free version of F4 for ``jax.grad`` compatibility. The official
+    CEC 2005 F4 adds Gaussian noise ``f(x) * (1 + 0.4*N(0,1))``, which is
+    omitted here (``noise_omitted=True`` in
+    ``cec2005_function_characteristics``).
+
+    ![F4 3D surface](img/3d/f4.png){ width=30% }
+    ![F4 2D surface](img/2d/f4.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix (unused).
+    Q : jax.Array
+        Second rotation matrix (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
     """
     z = x - x_opt
     return jnp.sum(jnp.cumsum(z) ** 2) + f_opt
@@ -84,14 +185,34 @@ def f5(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F5: Schwefel's Problem 2.6 with Global Optimum on Bounds.
+    """Schwefel's Problem 2.6 with Global Optimum on Bounds (F5).
 
-    R is repurposed as the A matrix (n x n). x_opt is the global optimum
-    (±5 per dim in the original; here sampled from [-100, 100] — parameters
-    are seed-generated, not from official CEC 2005 data files).
+    Non-differentiable function based on the Chebyshev norm. R is repurposed
+    as the A matrix (n x n). In the official CEC 2005 spec, x_opt has
+    components clamped to ±5; here x_opt is sampled from [-100, 100] as
+    parameters are seed-generated rather than loaded from official data files.
 
-    f(x) = max_i(|sum_j(A_ij * x_j) - b_i|) where b = A @ x_opt
-          = max(|R @ (x - x_opt)|)
+    ![F5 3D surface](img/3d/f5.png){ width=30% }
+    ![F5 2D surface](img/2d/f5.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Repurposed as the A matrix (n x n); b = A @ x_opt is computed
+        internally.
+    Q : jax.Array
+        Second rotation matrix (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
     """
     diff = R @ (x - x_opt)
     return jnp.max(jnp.abs(diff)) + f_opt
@@ -104,8 +225,32 @@ def f6(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F6: Shifted Rosenbrock's. Minimum f_opt at x_opt.
-    Shift is x - x_opt + 1 to place valley at x_opt."""
+    """Shifted Rosenbrock's function (F6).
+
+    Multimodal function with a narrow curved valley. Input is shifted by
+    ``x - x_opt + 1`` to place the valley at x_opt.
+
+    ![F6 3D surface](img/3d/f6.png){ width=30% }
+    ![F6 2D surface](img/2d/f6.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix (unused).
+    Q : jax.Array
+        Second rotation matrix (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     z = x - x_opt + 1.0
     return (
         jnp.sum(100.0 * (z[:-1] ** 2 - z[1:]) ** 2 + (z[:-1] - 1.0) ** 2)
@@ -120,10 +265,31 @@ def f7(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F7: Shifted Rotated Griewank's without Bounds. Minimum f_opt at
-    x_opt."""
-    from bbob_jax._src.utils import griewank
+    """Shifted Rotated Griewank's without Bounds (F7).
 
+    Multimodal function with many regularly distributed local optima.
+
+    ![F7 3D surface](img/3d/f7.png){ width=30% }
+    ![F7 2D surface](img/2d/f7.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     z = R @ (x - x_opt)
     return griewank(z) + f_opt
 
@@ -135,10 +301,31 @@ def f8(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F8: Shifted Rotated Ackley's with Global Optimum on Bounds.
-    R is the rotation matrix; Q is unused."""
-    from bbob_jax._src.utils import ackley
+    """Shifted Rotated Ackley's with Global Optimum on Bounds (F8).
 
+    Multimodal function with many local optima and a nearly flat outer region.
+
+    ![F8 3D surface](img/3d/f8.png){ width=30% }
+    ![F8 2D surface](img/2d/f8.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     z = R @ (x - x_opt)
     return ackley(z) + f_opt
 
@@ -150,7 +337,32 @@ def f9(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F9: Shifted Rastrigin's. Minimum f_opt at x_opt."""
+    """Shifted Rastrigin's function (F9).
+
+    Highly multimodal function with many local optima arranged in a grid.
+    Variables are not rotated.
+
+    ![F9 3D surface](img/3d/f9.png){ width=30% }
+    ![F9 2D surface](img/2d/f9.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix (unused).
+    Q : jax.Array
+        Second rotation matrix (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     z = x - x_opt
     return jnp.sum(z**2 - 10.0 * jnp.cos(2.0 * jnp.pi * z) + 10.0) + f_opt
 
@@ -162,7 +374,31 @@ def f10(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F10: Shifted Rotated Rastrigin's. Minimum f_opt at x_opt."""
+    """Shifted Rotated Rastrigin's function (F10).
+
+    Highly multimodal function with many local optima and rotation applied.
+
+    ![F10 3D surface](img/3d/f10.png){ width=30% }
+    ![F10 2D surface](img/2d/f10.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     z = R @ (x - x_opt)
     return jnp.sum(z**2 - 10.0 * jnp.cos(2.0 * jnp.pi * z) + 10.0) + f_opt
 
@@ -174,9 +410,31 @@ def f11(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F11: Shifted Rotated Weierstrass. Minimum f_opt at x_opt."""
-    from bbob_jax._src.utils import cec2005_weierstrass
+    """Shifted Rotated Weierstrass function (F11).
 
+    Continuous but differentiable only finitely many times. Highly multimodal.
+
+    ![F11 3D surface](img/3d/f11.png){ width=30% }
+    ![F11 2D surface](img/2d/f11.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     z = R @ (x - x_opt)
     return cec2005_weierstrass(z) + f_opt
 
@@ -188,14 +446,32 @@ def f12(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F12: Schwefel's Problem 2.13.
+    """Schwefel's Problem 2.13 (F12).
 
-    R is repurposed as the 'a' matrix (n x n), Q as the 'b' matrix (n x n).
-    x_opt stores the alpha vector (optimal solution).
+    Unimodal function defined via inner-product matrices. R is repurposed as
+    the 'a' matrix (n x n), Q as the 'b' matrix (n x n), and x_opt stores the
+    alpha vector (optimal solution).
 
-    A_i = sum_j(a_ij * sin(alpha_j) + b_ij * cos(alpha_j))
-    B_i(x) = sum_j(a_ij * sin(x_j) + b_ij * cos(x_j))
-    f(x) = sum_i((A_i - B_i(x))^2) + f_opt
+    ![F12 3D surface](img/3d/f12.png){ width=30% }
+    ![F12 2D surface](img/2d/f12.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Alpha vector (optimal solution angles).
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Repurposed as the 'a' matrix (n x n).
+    Q : jax.Array
+        Repurposed as the 'b' matrix (n x n).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
     """
     A = jnp.sum(
         R * jnp.sin(x_opt)[None, :] + Q * jnp.cos(x_opt)[None, :], axis=-1
@@ -211,10 +487,31 @@ def f13(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F13: Expanded Extended Griewank's plus Rosenbrock's F8F2.
+    """Expanded Extended Griewank's plus Rosenbrock's F8F2 (F13).
 
-    Applies g(rosenbrock(x_i, x_{i+1})) cyclically, where g is the 1D Griewank.
-    x_opt shifts the input. R and Q are unused.
+    Applies a 1D Griewank function to consecutive Rosenbrock values cyclically.
+    R and Q are unused.
+
+    ![F13 3D surface](img/3d/f13.png){ width=30% }
+    ![F13 2D surface](img/2d/f13.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix (unused).
+    Q : jax.Array
+        Second rotation matrix (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
     """
     z = x - x_opt
     zi = z[:-1]
@@ -234,12 +531,31 @@ def f14(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F14: Shifted Rotated Expanded Scaffer's F6.
+    """Shifted Rotated Expanded Scaffer's F6 (F14).
 
-    Applies Scaffer F6 to consecutive pairs (z_i, z_{i+1}) cyclically.
+    Applies Scaffer's F6 to consecutive pairs cyclically after rotation.
+
+    ![F14 3D surface](img/3d/f14.png){ width=30% }
+    ![F14 2D surface](img/2d/f14.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
     """
-    from bbob_jax._src.utils import scaffer_f6
-
     z = R @ (x - x_opt)
     pairs_val = jax.vmap(scaffer_f6)(z[:-1], z[1:])
     last_val = scaffer_f6(z[-1], z[0])
@@ -285,11 +601,33 @@ def f15(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F15: Hybrid Composition Function 1 (10 Rastrigin, no rotation).
-    sigma=[1]*10. F15 uses identity rotation per component per CEC 2005 spec.
-    """
-    from bbob_jax._src.utils import hybrid_composition
+    """Hybrid Composition Function 1 (F15).
 
+    Ten Rastrigin components without rotation (identity matrices per CEC 2005
+    spec). ``sigma=[1]*10``.
+
+    ![F15 3D surface](img/3d/f15.png){ width=30% }
+    ![F15 2D surface](img/2d/f15.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Matrix of component optima of shape (10, ndim).
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix stack (overridden internally with identity matrices).
+    Q : jax.Array
+        Second rotation matrix stack (overridden internally with identity
+        matrices).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     nc = 10
     fns = [_rastrigin_base] * nc
@@ -314,11 +652,31 @@ def f16(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F16: Rotated Hybrid Composition Function 1 (10 Rastrigin).
-    sigma=[1]*10. Uses R and Q rotation matrices from factory.
-    """
-    from bbob_jax._src.utils import hybrid_composition
+    """Rotated Hybrid Composition Function 1 (F16).
 
+    Ten Rastrigin components with rotation. ``sigma=[1]*10``.
+
+    ![F16 3D surface](img/3d/f16.png){ width=30% }
+    ![F16 2D surface](img/2d/f16.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Matrix of component optima of shape (10, ndim).
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stack of rotation matrices of shape (10, ndim, ndim).
+    Q : jax.Array
+        Stack of second rotation matrices of shape (10, ndim, ndim).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     nc = 10
     fns = [_rastrigin_base] * nc
@@ -338,23 +696,38 @@ def f17(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F17: Rotated Hybrid Composition Function 1 with Noise (noise omitted).
+    """Rotated Hybrid Composition Function 1 with Noise (F17).
 
-    The official CEC 2005 F17 adds noise: f(x) * (1 + 0.2*|N(0,1)|).
-    Noise is omitted here for jax.grad compatibility.
-    noise_omitted=True in cec2005_function_characteristics.
+    Noise-free version of F17 for ``jax.grad`` compatibility. The official
+    CEC 2005 F17 adds noise ``f(x) * (1 + 0.2*|N(0,1)|)``, which is omitted
+    here (``noise_omitted=True`` in ``cec2005_function_characteristics``).
+
+    ![F17 3D surface](img/3d/f17.png){ width=30% }
+    ![F17 2D surface](img/2d/f17.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Matrix of component optima of shape (10, ndim).
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stack of rotation matrices of shape (10, ndim, ndim).
+    Q : jax.Array
+        Stack of second rotation matrices of shape (10, ndim, ndim).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
     """
     return f16(x, x_opt, f_opt, R, Q)
 
 
 def _composition2_fns() -> list:
     """Return 10 component functions for Composition 2 (F18-F20)."""
-    from bbob_jax._src.utils import (
-        ackley,
-        cec2005_weierstrass,
-        griewank,
-    )
-
     return [
         ackley,
         ackley,
@@ -376,11 +749,32 @@ def f18(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F18: Rotated Hybrid Composition Function 2.
-    sigma = [1,1,1,1,1,2,2,2,2,2]. Uses R and Q from factory.
-    """
-    from bbob_jax._src.utils import hybrid_composition
+    """Rotated Hybrid Composition Function 2 (F18).
 
+    Ten mixed components (Ackley, Rastrigin, Elliptic, Weierstrass, Griewank)
+    with ``sigma=[1,1,1,1,1,2,2,2,2,2]``.
+
+    ![F18 3D surface](img/3d/f18.png){ width=30% }
+    ![F18 2D surface](img/2d/f18.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Matrix of component optima of shape (10, ndim).
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stack of rotation matrices of shape (10, ndim, ndim).
+    Q : jax.Array
+        Stack of second rotation matrices of shape (10, ndim, ndim).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     nc = 10
     fns = _composition2_fns()
@@ -399,11 +793,32 @@ def f19(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F19: Rotated Hybrid Composition Function 2 with Narrow Basin.
-    Identical to F18 but sigma[0] = 0.1 (narrow basin for first component).
-    """
-    from bbob_jax._src.utils import hybrid_composition
+    """Rotated Hybrid Composition Function 2 with Narrow Basin (F19).
 
+    Identical to F18 but with ``sigma[0]=0.1``, creating a narrow basin for
+    the first component.
+
+    ![F19 3D surface](img/3d/f19.png){ width=30% }
+    ![F19 2D surface](img/2d/f19.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Matrix of component optima of shape (10, ndim).
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stack of rotation matrices of shape (10, ndim, ndim).
+    Q : jax.Array
+        Stack of second rotation matrices of shape (10, ndim, ndim).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     nc = 10
     fns = _composition2_fns()
@@ -422,23 +837,38 @@ def f20(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F20: Hybrid Composition 2 with Global Optimum on Bounds.
+    """Hybrid Composition 2 with Global Optimum on Bounds (F20).
 
-    In the CEC 2005 spec, x_opt[0] is clamped to the search boundary.
-    In this seed-generated implementation, x_opt is sampled from
-    [-100, 100] and may not be on the boundary. Formula identical to F18.
+    In the CEC 2005 spec, x_opt[0] is clamped to the search boundary. Here,
+    x_opt is sampled from [-100, 100] as parameters are seed-generated rather
+    than loaded from official data files. Formula is identical to F18.
+
+    ![F20 3D surface](img/3d/f20.png){ width=30% }
+    ![F20 2D surface](img/2d/f20.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Matrix of component optima of shape (10, ndim).
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stack of rotation matrices of shape (10, ndim, ndim).
+    Q : jax.Array
+        Stack of second rotation matrices of shape (10, ndim, ndim).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
     """
     return f18(x, x_opt, f_opt, R, Q)
 
 
 def _composition3_fns() -> list:
     """Return 10 component functions for Composition 3 (F21-F23)."""
-    from bbob_jax._src.utils import (
-        ackley,
-        cec2005_weierstrass,
-        griewank,
-    )
-
     return [
         _rastrigin_base,
         _rastrigin_base,
@@ -460,9 +890,32 @@ def f21(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F21: Rotated Hybrid Composition Function 3. sigma=[1]*10."""
-    from bbob_jax._src.utils import hybrid_composition
+    """Rotated Hybrid Composition Function 3 (F21).
 
+    Ten mixed components (Rastrigin, Weierstrass, Griewank, Ackley, Sphere)
+    with ``sigma=[1]*10``.
+
+    ![F21 3D surface](img/3d/f21.png){ width=30% }
+    ![F21 2D surface](img/2d/f21.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Matrix of component optima of shape (10, ndim).
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stack of rotation matrices of shape (10, ndim, ndim).
+    Q : jax.Array
+        Stack of second rotation matrices of shape (10, ndim, ndim).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     nc = 10
     fns = _composition3_fns()
@@ -481,15 +934,34 @@ def f22(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F22: Rotated Hybrid Composition 3 with High Condition Number Matrix.
+    """Rotated Hybrid Composition 3 with High Condition Number Matrix (F22).
 
     In the official CEC 2005 spec, one component's rotation matrix is replaced
-    with an ill-conditioned matrix. Here, the factory generates standard
-    rotation matrices. To approximate the high-condition effect, lambda_[0] is
-    boosted by a factor of 10.
-    """
-    from bbob_jax._src.utils import hybrid_composition
+    with an ill-conditioned matrix. Here, standard rotation matrices are used
+    and ``lambda_[0]`` is boosted by a factor of 10 to approximate the
+    high-condition effect.
 
+    ![F22 3D surface](img/3d/f22.png){ width=30% }
+    ![F22 2D surface](img/2d/f22.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Matrix of component optima of shape (10, ndim).
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stack of rotation matrices of shape (10, ndim, ndim).
+    Q : jax.Array
+        Stack of second rotation matrices of shape (10, ndim, ndim).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     nc = 10
     fns = _composition3_fns()
@@ -510,13 +982,34 @@ def f23(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F23: Non-Continuous Rotated Hybrid Composition Function 3.
+    """Non-Continuous Rotated Hybrid Composition Function 3 (F23).
 
-    The official CEC 2005 F23 applies a non-continuous rounding step:
-        y_i = round(2*x_i) / 2  if |x_i - x_opt_i| >= 0.5, else x_i
-    This is omitted entirely for jax.grad compatibility — F23 is implemented
-    as a continuous version of F21.
-    structure_modified=True in cec2005_function_characteristics.
+    Continuous version of F23 for ``jax.grad`` compatibility. The official
+    CEC 2005 F23 applies a rounding step
+    ``y_i = round(2*x_i)/2 if |x_i - x_opt_i| >= 0.5 else x_i``, which is
+    omitted here (``structure_modified=True`` in
+    ``cec2005_function_characteristics``). Formula is identical to F21.
+
+    ![F23 3D surface](img/3d/f23.png){ width=30% }
+    ![F23 2D surface](img/2d/f23.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Matrix of component optima of shape (10, ndim).
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stack of rotation matrices of shape (10, ndim, ndim).
+    Q : jax.Array
+        Stack of second rotation matrices of shape (10, ndim, ndim).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
     """
     return f21(x, x_opt, f_opt, R, Q)
 
@@ -528,11 +1021,31 @@ def f24(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F24: Rotated Hybrid Composition Function 4.
-    Same components as F21 with sigma=[2]*10 (wider basins).
-    """
-    from bbob_jax._src.utils import hybrid_composition
+    """Rotated Hybrid Composition Function 4 (F24).
 
+    Same components as F21 with ``sigma=[2]*10`` (wider basins).
+
+    ![F24 3D surface](img/3d/f24.png){ width=30% }
+    ![F24 2D surface](img/2d/f24.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Matrix of component optima of shape (10, ndim).
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stack of rotation matrices of shape (10, ndim, ndim).
+    Q : jax.Array
+        Stack of second rotation matrices of shape (10, ndim, ndim).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
     ndim = x.shape[-1]
     nc = 10
     fns = _composition3_fns()
@@ -551,7 +1064,29 @@ def f25(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """F25: Rotated Hybrid Composition Function 4 without Bounds.
+    """Rotated Hybrid Composition Function 4 without Bounds (F25).
+
     Identical to F24 — neither F24 nor F25 applies a boundary penalty.
+
+    ![F25 3D surface](img/3d/f25.png){ width=30% }
+    ![F25 2D surface](img/2d/f25.png){ width=30% }
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Matrix of component optima of shape (10, ndim).
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stack of rotation matrices of shape (10, ndim, ndim).
+    Q : jax.Array
+        Stack of second rotation matrices of shape (10, ndim, ndim).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
     """
     return f24(x, x_opt, f_opt, R, Q)
