@@ -11,9 +11,13 @@ from bbob_jax._src.utils import (
 
 
 def test_ackley_minimum():
-    """Ackley minimum is 0 at origin."""
+    """Ackley minimum is approximately 0 at origin.
+
+    A small epsilon (1e-10) is added under the sqrt to avoid NaN gradients at
+    x=0 (sqrt'(0) = inf). This shifts the function value by ~4e-5 at x=0.
+    """
     x = jnp.zeros(5)
-    assert jnp.isclose(ackley(x), 0.0, atol=1e-5)
+    assert jnp.isclose(ackley(x), 0.0, atol=1e-4)
 
 
 def test_ackley_shape():

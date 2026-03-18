@@ -10,6 +10,8 @@ Reference: Suganthan et al. (2005), "Problem Definitions and Evaluation
 Criteria for the CEC 2005 Special Session on Real-Parameter Optimization."
 """
 
+from collections.abc import Callable
+
 import jax
 import jax.numpy as jnp
 
@@ -244,6 +246,38 @@ def f14(
     return jnp.sum(pairs_val) + last_val + f_opt
 
 
+def _rastrigin_base(z: jax.Array) -> jax.Array:
+    """Rastrigin without shift/offset for use as composition component."""
+    return jnp.sum(z**2 - 10.0 * jnp.cos(2.0 * jnp.pi * z) + 10.0)
+
+
+def _elliptic_base(z: jax.Array) -> jax.Array:
+    """High conditioned elliptic without shift/rotation for composition use."""
+    ndim = z.shape[-1]
+    exponents = jnp.arange(ndim, dtype=jnp.float32) / jnp.maximum(ndim - 1, 1)
+    coeffs = 10.0 ** (6.0 * exponents)
+    return jnp.sum(coeffs * z**2)
+
+
+def _sphere_base(z: jax.Array) -> jax.Array:
+    return jnp.sum(z**2)
+
+
+def _composition_bias() -> jax.Array:
+    return jnp.array(
+        [0.0, 100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0, 800.0, 900.0]
+    )
+
+
+def _height_normalize(
+    fn: Callable[[jax.Array], jax.Array], ndim: int, c: float = 2000.0
+) -> jax.Array:
+    """Compute lambda_ for height normalization: c / |fn(5*ones(ndim))|."""
+    ref = 5.0 * jnp.ones(ndim)
+    val = jnp.abs(fn(ref))
+    return jnp.where(val > 0.0, c / val, 1.0)
+
+
 def f15(
     x: jax.Array,
     x_opt: jax.Array,
@@ -251,7 +285,26 @@ def f15(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F15: Hybrid Composition Function 1 (10 Rastrigin, no rotation).
+    sigma=[1]*10. F15 uses identity rotation per component per CEC 2005 spec.
+    """
+    from bbob_jax._src.utils import hybrid_composition
+
+    ndim = x.shape[-1]
+    nc = 10
+    fns = [_rastrigin_base] * nc
+    sigma = jnp.ones(nc)
+    lam_val = _height_normalize(_rastrigin_base, ndim)
+    lambda_ = jnp.full(nc, lam_val)
+    bias = _composition_bias()
+    # F15 has no rotation: override R and Q with identity stacks
+    eye_stack = jnp.stack([jnp.eye(ndim)] * nc)
+    return (
+        hybrid_composition(
+            x, fns, sigma, lambda_, bias, x_opt, eye_stack, eye_stack
+        )
+        + f_opt
+    )
 
 
 def f16(
@@ -261,7 +314,21 @@ def f16(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F16: Rotated Hybrid Composition Function 1 (10 Rastrigin).
+    sigma=[1]*10. Uses R and Q rotation matrices from factory.
+    """
+    from bbob_jax._src.utils import hybrid_composition
+
+    ndim = x.shape[-1]
+    nc = 10
+    fns = [_rastrigin_base] * nc
+    sigma = jnp.ones(nc)
+    lam_val = _height_normalize(_rastrigin_base, ndim)
+    lambda_ = jnp.full(nc, lam_val)
+    bias = _composition_bias()
+    return (
+        hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R, Q) + f_opt
+    )
 
 
 def f17(
@@ -271,7 +338,13 @@ def f17(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F17: Rotated Hybrid Composition Function 1 with Noise (noise omitted).
+
+    The official CEC 2005 F17 adds noise: f(x) * (1 + 0.2*|N(0,1)|).
+    Noise is omitted here for jax.grad compatibility.
+    noise_omitted=True in cec2005_function_characteristics.
+    """
+    return f16(x, x_opt, f_opt, R, Q)
 
 
 def f18(

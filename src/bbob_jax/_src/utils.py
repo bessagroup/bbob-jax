@@ -117,10 +117,11 @@ def _create_mesh(
 def ackley(x: jax.Array) -> jax.Array:
     """Ackley function. Minimum 0 at origin. Accepts 1D input (ndim,)."""
     ndim = x.shape[-1]
-    sum_sq = jnp.sum(x**2)
+    sum_sq = jnp.sum(jnp.square(x))
     sum_cos = jnp.sum(jnp.cos(2.0 * jnp.pi * x))
+    # Small epsilon avoids NaN gradient at x=0 (sqrt'(0) = inf)
     return (
-        -20.0 * jnp.exp(-0.2 * jnp.sqrt(sum_sq / ndim))
+        -20.0 * jnp.exp(-0.2 * jnp.sqrt(sum_sq / ndim + 1e-10))
         - jnp.exp(sum_cos / ndim)
         + 20.0
         + jnp.e
@@ -130,15 +131,15 @@ def ackley(x: jax.Array) -> jax.Array:
 def griewank(x: jax.Array) -> jax.Array:
     """Griewank function. Minimum 0 at origin. Accepts 1D input (ndim,)."""
     ndim = x.shape[-1]
-    indices = jnp.arange(1, ndim + 1, dtype=jnp.float32)
-    sum_sq = jnp.sum(x**2) / 4000.0
+    indices = jnp.arange(1, ndim + 1, dtype=x.dtype)
+    sum_sq = jnp.sum(jnp.square(x)) / 4000.0
     prod_cos = jnp.prod(jnp.cos(x / jnp.sqrt(indices)))
     return sum_sq - prod_cos + 1.0
 
 
 def scaffer_f6(x: jax.Array, y: jax.Array) -> jax.Array:
     """Scaffer's F6 2D kernel. Minimum 0 at (0, 0). Accepts scalar inputs."""
-    r2 = x**2 + y**2
+    r2 = jnp.square(x) + jnp.square(y)
     return 0.5 + (jnp.sin(jnp.sqrt(r2)) ** 2 - 0.5) / (1.0 + 0.001 * r2) ** 2
 
 
@@ -152,6 +153,7 @@ def cec2005_weierstrass(x: jax.Array) -> jax.Array:
     Accepts 1D input (ndim,).
     """
     a, b = 0.5, 3.0
+    ndim = x.shape[-1]
     k = jnp.arange(0, 21, dtype=jnp.float32)
     ak = a**k  # (21,)
     bk = b**k  # (21,)
@@ -161,7 +163,6 @@ def cec2005_weierstrass(x: jax.Array) -> jax.Array:
     )  # (ndim, 21)
     outer_sum = jnp.sum(cos_terms)
     # Constant subtraction: n * sum_k(ak * cos(2*pi*bk*0.5))
-    ndim = x.shape[-1]
     constant = ndim * jnp.sum(ak * jnp.cos(jnp.pi * bk))
     return outer_sum - constant
 
@@ -203,15 +204,13 @@ def hybrid_composition(
     ndim = x.shape[-1]
     num_components = len(fns)  # Python constant — unrolled at trace time
 
-    # Unnormalized weights
+    # Weights via numerically stable softmax over negative squared distances.
+    # This avoids NaN gradients from division by very small w_sum values,
+    # which cause float32 overflow in the gradient when w_sum^2 underflows.
     diffs = x[None, :] - x_opt  # (num_components, ndim)
     dist_sq = jnp.sum(diffs**2, axis=-1)  # (num_components,)
-    w = jnp.exp(-dist_sq / (2.0 * ndim * sigma**2))  # (num_components,)
-
-    # Safe normalization: if all weights underflow to 0, use first component
-    w_sum = jnp.sum(w)
-    first_only = jnp.zeros(num_components).at[0].set(1.0)
-    w = jnp.where(w_sum > 0.0, w / w_sum, first_only)
+    log_w = -dist_sq / (2.0 * ndim * sigma**2)  # (num_components,)
+    w = jax.nn.softmax(log_w)  # numerically stable; gradient always finite
 
     # Evaluate each component (Python loop — unrolled at JIT trace time)
     # Double rotation: Q[i] @ (R[i] @ z) per CEC 2005 spec
