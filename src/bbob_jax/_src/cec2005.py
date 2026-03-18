@@ -431,6 +431,28 @@ def f20(
     return f18(x, x_opt, f_opt, R, Q)
 
 
+def _composition3_fns() -> list:
+    """Return 10 component functions for Composition 3 (F21-F23)."""
+    from bbob_jax._src.utils import (
+        ackley,
+        cec2005_weierstrass,
+        griewank,
+    )
+
+    return [
+        _rastrigin_base,
+        _rastrigin_base,
+        cec2005_weierstrass,
+        cec2005_weierstrass,
+        griewank,
+        griewank,
+        ackley,
+        ackley,
+        _sphere_base,
+        _sphere_base,
+    ]
+
+
 def f21(
     x: jax.Array,
     x_opt: jax.Array,
@@ -438,7 +460,18 @@ def f21(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F21: Rotated Hybrid Composition Function 3. sigma=[1]*10."""
+    from bbob_jax._src.utils import hybrid_composition
+
+    ndim = x.shape[-1]
+    nc = 10
+    fns = _composition3_fns()
+    sigma = jnp.ones(nc)
+    lambda_ = jnp.array([_height_normalize(fns[i], ndim) for i in range(nc)])
+    bias = _composition_bias()
+    return (
+        hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R, Q) + f_opt
+    )
 
 
 def f22(
@@ -448,7 +481,26 @@ def f22(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F22: Rotated Hybrid Composition 3 with High Condition Number Matrix.
+
+    In the official CEC 2005 spec, one component's rotation matrix is replaced
+    with an ill-conditioned matrix. Here, the factory generates standard
+    rotation matrices. To approximate the high-condition effect, lambda_[0] is
+    boosted by a factor of 10.
+    """
+    from bbob_jax._src.utils import hybrid_composition
+
+    ndim = x.shape[-1]
+    nc = 10
+    fns = _composition3_fns()
+    sigma = jnp.ones(nc)
+    lambda_ = jnp.array([_height_normalize(fns[i], ndim) for i in range(nc)])
+    # Boost first component to approximate high-condition effect
+    lambda_ = lambda_.at[0].multiply(10.0)
+    bias = _composition_bias()
+    return (
+        hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R, Q) + f_opt
+    )
 
 
 def f23(
@@ -458,7 +510,15 @@ def f23(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F23: Non-Continuous Rotated Hybrid Composition Function 3.
+
+    The official CEC 2005 F23 applies a non-continuous rounding step:
+        y_i = round(2*x_i) / 2  if |x_i - x_opt_i| >= 0.5, else x_i
+    This is omitted entirely for jax.grad compatibility — F23 is implemented
+    as a continuous version of F21.
+    structure_modified=True in cec2005_function_characteristics.
+    """
+    return f21(x, x_opt, f_opt, R, Q)
 
 
 def f24(
@@ -468,7 +528,20 @@ def f24(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F24: Rotated Hybrid Composition Function 4.
+    Same components as F21 with sigma=[2]*10 (wider basins).
+    """
+    from bbob_jax._src.utils import hybrid_composition
+
+    ndim = x.shape[-1]
+    nc = 10
+    fns = _composition3_fns()
+    sigma = jnp.full(nc, 2.0)
+    lambda_ = jnp.array([_height_normalize(fns[i], ndim) for i in range(nc)])
+    bias = _composition_bias()
+    return (
+        hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R, Q) + f_opt
+    )
 
 
 def f25(
@@ -478,4 +551,7 @@ def f25(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F25: Rotated Hybrid Composition Function 4 without Bounds.
+    Identical to F24 — neither F24 nor F25 applies a boundary penalty.
+    """
+    return f24(x, x_opt, f_opt, R, Q)
