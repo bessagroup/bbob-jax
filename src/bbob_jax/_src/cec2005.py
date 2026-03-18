@@ -347,6 +347,28 @@ def f17(
     return f16(x, x_opt, f_opt, R, Q)
 
 
+def _composition2_fns() -> list:
+    """Return 10 component functions for Composition 2 (F18-F20)."""
+    from bbob_jax._src.utils import (
+        ackley,
+        cec2005_weierstrass,
+        griewank,
+    )
+
+    return [
+        ackley,
+        ackley,
+        _rastrigin_base,
+        _rastrigin_base,
+        _elliptic_base,
+        _elliptic_base,
+        cec2005_weierstrass,
+        cec2005_weierstrass,
+        griewank,
+        griewank,
+    ]
+
+
 def f18(
     x: jax.Array,
     x_opt: jax.Array,
@@ -354,7 +376,20 @@ def f18(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F18: Rotated Hybrid Composition Function 2.
+    sigma = [1,1,1,1,1,2,2,2,2,2]. Uses R and Q from factory.
+    """
+    from bbob_jax._src.utils import hybrid_composition
+
+    ndim = x.shape[-1]
+    nc = 10
+    fns = _composition2_fns()
+    sigma = jnp.array([1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0])
+    lambda_ = jnp.array([_height_normalize(fns[i], ndim) for i in range(nc)])
+    bias = _composition_bias()
+    return (
+        hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R, Q) + f_opt
+    )
 
 
 def f19(
@@ -364,7 +399,20 @@ def f19(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F19: Rotated Hybrid Composition Function 2 with Narrow Basin.
+    Identical to F18 but sigma[0] = 0.1 (narrow basin for first component).
+    """
+    from bbob_jax._src.utils import hybrid_composition
+
+    ndim = x.shape[-1]
+    nc = 10
+    fns = _composition2_fns()
+    sigma = jnp.array([0.1, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0])
+    lambda_ = jnp.array([_height_normalize(fns[i], ndim) for i in range(nc)])
+    bias = _composition_bias()
+    return (
+        hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R, Q) + f_opt
+    )
 
 
 def f20(
@@ -374,7 +422,13 @@ def f20(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    raise NotImplementedError
+    """F20: Hybrid Composition 2 with Global Optimum on Bounds.
+
+    In the CEC 2005 spec, x_opt[0] is clamped to the search boundary.
+    In this seed-generated implementation, x_opt is sampled from
+    [-100, 100] and may not be on the boundary. Formula identical to F18.
+    """
+    return f18(x, x_opt, f_opt, R, Q)
 
 
 def f21(
