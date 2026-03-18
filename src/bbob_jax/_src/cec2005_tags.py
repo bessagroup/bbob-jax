@@ -1,8 +1,15 @@
+#                                                                       Modules
+# =============================================================================
+
+# Standard
 from collections import defaultdict
 
+#                                                          Authorship & Credits
+# =============================================================================
 __author__ = "Martin van der Schelling (M.P.vanderSchelling@tudelft.nl)"
 __credits__ = ["Martin van der Schelling"]
 __status__ = "Stable"
+# =============================================================================
 
 # Schema keys:
 #   unimodal, multimodal: mutually exclusive; composition implies multimodal
@@ -11,6 +18,7 @@ __status__ = "Stable"
 #                  here for jax.grad compatibility
 #   structure_modified: function's mathematical structure is altered from
 #                       the CEC 2005 spec for JAX compatibility (F23 only)
+
 cec2005_function_characteristics: defaultdict = defaultdict(
     dict,
     {
