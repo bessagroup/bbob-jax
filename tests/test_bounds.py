@@ -1,7 +1,9 @@
+import math
+
 import pytest
-from bbob_jax import bbob_bounds, cec2005_bounds
-from bbob_jax._src.bounds import BBOB_BOUNDS, CEC2005_BOUNDS
-from bbob_jax import registry, cec2005_registry
+
+from bbob_jax import bbob_bounds, cec2005_bounds, registry
+from bbob_jax._src.bounds import BBOB_BOUNDS
 
 
 def test_bbob_bounds_keys():
@@ -18,16 +20,40 @@ def test_bbob_bounds_values():
 
 
 def test_cec2005_bounds_keys():
-    """cec2005_bounds has exactly the same keys as cec2005_registry."""
-    assert set(cec2005_bounds.keys()) == set(cec2005_registry.keys())
+    """cec2005_bounds has entries for all 25 CEC 2005 functions f1–f25."""
+    assert set(cec2005_bounds.keys()) == {f"f{i}" for i in range(1, 26)}
 
 
 def test_cec2005_bounds_values():
-    """All CEC 2005 bounds are (-100.0, 100.0)."""
-    for name, bounds in cec2005_bounds.items():
-        assert bounds == (-100.0, 100.0), (
-            f"{name}: expected (-100.0, 100.0), got {bounds}"
-        )
+    """CEC 2005 bounds are per-function as specified in the benchmark paper."""
+    expected = {
+        "f1": (-100.0, 100.0),
+        "f2": (-100.0, 100.0),
+        "f3": (-100.0, 100.0),
+        "f4": (-100.0, 100.0),
+        "f5": (-100.0, 100.0),
+        "f6": (-100.0, 100.0),
+        "f7": (0.0, 600.0),
+        "f8": (-32.0, 32.0),
+        "f9": (-5.0, 5.0),
+        "f10": (-5.0, 5.0),
+        "f11": (-0.5, 0.5),
+        "f12": (-math.pi, math.pi),
+        "f13": (-3.0, 1.0),
+        "f14": (-100.0, 100.0),
+        "f15": (-5.0, 5.0),
+        "f16": (-5.0, 5.0),
+        "f17": (-5.0, 5.0),
+        "f18": (-5.0, 5.0),
+        "f19": (-5.0, 5.0),
+        "f20": (-5.0, 5.0),
+        "f21": (-5.0, 5.0),
+        "f22": (-5.0, 5.0),
+        "f23": (-5.0, 5.0),
+        "f24": (-5.0, 5.0),
+        "f25": (2.0, 5.0),
+    }
+    assert cec2005_bounds == expected
 
 
 def test_bounds_count():
@@ -43,7 +69,6 @@ def test_no_key_overlap():
 
 def test_constants():
     assert BBOB_BOUNDS == (-5.0, 5.0)
-    assert CEC2005_BOUNDS == (-100.0, 100.0)
 
 
 @pytest.mark.parametrize("name", list(registry.keys()))
@@ -51,6 +76,18 @@ def test_bbob_lookup_by_name(name):
     assert bbob_bounds[name] == (-5.0, 5.0)
 
 
-@pytest.mark.parametrize("name", [f"f{i}" for i in range(1, 26)])
-def test_cec2005_lookup_by_name(name):
-    assert cec2005_bounds[name] == (-100.0, 100.0)
+@pytest.mark.parametrize(
+    "name,expected",
+    [
+        ("f1", (-100.0, 100.0)),
+        ("f7", (0.0, 600.0)),
+        ("f8", (-32.0, 32.0)),
+        ("f9", (-5.0, 5.0)),
+        ("f11", (-0.5, 0.5)),
+        ("f12", (-math.pi, math.pi)),
+        ("f13", (-3.0, 1.0)),
+        ("f25", (2.0, 5.0)),
+    ],
+)
+def test_cec2005_lookup_by_name(name, expected):
+    assert cec2005_bounds[name] == expected
