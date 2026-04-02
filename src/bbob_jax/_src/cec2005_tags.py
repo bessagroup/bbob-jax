@@ -16,8 +16,10 @@ __status__ = "Stable"
 #   rotated: function applies a rotation matrix to the input
 #   noise_omitted: function is noisy per CEC 2005 spec but noise is omitted
 #                  here for jax.grad compatibility
+#   grad_safe_approximation: function retains a smooth approximation instead
+#                            of the paper's exact branching/non-continuity
 #   structure_modified: function's mathematical structure is altered from
-#                       the CEC 2005 spec for JAX compatibility (F23 only)
+#                       the CEC 2005 spec for JAX compatibility
 
 cec2005_function_characteristics: defaultdict = defaultdict(
     dict,
@@ -28,6 +30,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": False,
             "rotated": False,
             "noise_omitted": False,
+            "grad_safe_approximation": False,
             "structure_modified": False,
         },
         "f2": {
@@ -36,6 +39,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": False,
             "rotated": False,
             "noise_omitted": False,
+            "grad_safe_approximation": False,
             "structure_modified": False,
         },
         "f3": {
@@ -44,6 +48,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": False,
             "rotated": True,
             "noise_omitted": False,
+            "grad_safe_approximation": False,
             "structure_modified": False,
         },
         "f4": {
@@ -52,6 +57,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": False,
             "rotated": False,
             "noise_omitted": True,
+            "grad_safe_approximation": True,
             "structure_modified": False,
         },
         "f5": {
@@ -60,6 +66,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": False,
             "rotated": False,
             "noise_omitted": False,
+            "grad_safe_approximation": False,
             "structure_modified": False,
         },
         "f6": {
@@ -68,6 +75,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": False,
             "rotated": False,
             "noise_omitted": False,
+            "grad_safe_approximation": False,
             "structure_modified": False,
         },
         "f7": {
@@ -76,6 +84,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": False,
             "rotated": True,
             "noise_omitted": False,
+            "grad_safe_approximation": False,
             "structure_modified": False,
         },
         "f8": {
@@ -84,6 +93,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": False,
             "rotated": True,
             "noise_omitted": False,
+            "grad_safe_approximation": False,
             "structure_modified": False,
         },
         "f9": {
@@ -92,6 +102,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": False,
             "rotated": False,
             "noise_omitted": False,
+            "grad_safe_approximation": False,
             "structure_modified": False,
         },
         "f10": {
@@ -100,6 +111,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": False,
             "rotated": True,
             "noise_omitted": False,
+            "grad_safe_approximation": False,
             "structure_modified": False,
         },
         "f11": {
@@ -108,6 +120,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": False,
             "rotated": True,
             "noise_omitted": False,
+            "grad_safe_approximation": False,
             "structure_modified": False,
         },
         "f12": {
@@ -116,6 +129,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": False,
             "rotated": False,
             "noise_omitted": False,
+            "grad_safe_approximation": False,
             "structure_modified": False,
         },
         "f13": {
@@ -124,6 +138,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": False,
             "rotated": False,
             "noise_omitted": False,
+            "grad_safe_approximation": False,
             "structure_modified": False,
         },
         "f14": {
@@ -132,6 +147,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": False,
             "rotated": True,
             "noise_omitted": False,
+            "grad_safe_approximation": False,
             "structure_modified": False,
         },
         "f15": {
@@ -140,6 +156,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": True,
             "rotated": False,
             "noise_omitted": False,
+            "grad_safe_approximation": True,
             "structure_modified": False,
         },
         "f16": {
@@ -148,6 +165,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": True,
             "rotated": True,
             "noise_omitted": False,
+            "grad_safe_approximation": True,
             "structure_modified": False,
         },
         "f17": {
@@ -156,6 +174,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": True,
             "rotated": True,
             "noise_omitted": True,
+            "grad_safe_approximation": True,
             "structure_modified": False,
         },
         "f18": {
@@ -164,6 +183,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": True,
             "rotated": True,
             "noise_omitted": False,
+            "grad_safe_approximation": True,
             "structure_modified": False,
         },
         "f19": {
@@ -172,6 +192,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": True,
             "rotated": True,
             "noise_omitted": False,
+            "grad_safe_approximation": True,
             "structure_modified": False,
         },
         "f20": {
@@ -180,6 +201,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": True,
             "rotated": True,
             "noise_omitted": False,
+            "grad_safe_approximation": True,
             "structure_modified": False,
         },
         "f21": {
@@ -188,6 +210,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": True,
             "rotated": True,
             "noise_omitted": False,
+            "grad_safe_approximation": True,
             "structure_modified": False,
         },
         "f22": {
@@ -196,6 +219,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": True,
             "rotated": True,
             "noise_omitted": False,
+            "grad_safe_approximation": True,
             "structure_modified": False,
         },
         "f23": {
@@ -204,6 +228,7 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "composition": True,
             "rotated": True,
             "noise_omitted": False,
+            "grad_safe_approximation": True,
             "structure_modified": True,
         },
         "f24": {
@@ -211,16 +236,18 @@ cec2005_function_characteristics: defaultdict = defaultdict(
             "multimodal": True,
             "composition": True,
             "rotated": True,
-            "noise_omitted": False,
-            "structure_modified": False,
+            "noise_omitted": True,
+            "grad_safe_approximation": True,
+            "structure_modified": True,
         },
         "f25": {
             "unimodal": False,
             "multimodal": True,
             "composition": True,
             "rotated": True,
-            "noise_omitted": False,
-            "structure_modified": False,
+            "noise_omitted": True,
+            "grad_safe_approximation": True,
+            "structure_modified": True,
         },
     },
 )

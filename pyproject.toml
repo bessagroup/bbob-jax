@@ -16,14 +16,15 @@ classifiers = [
 ]
 dependencies = [
   "jax",
-  "jaxtyping>=0.3.3"
+  "jaxtyping>=0.3.3",
+  "softjax"
 ]
 description = "BBOB Benchmark function implemented in JAX"
 keywords = ["jax", "bbob", "benchmarking", "black-box", "optimization"]
 license = {text = "BSD-3-Clause"}
 name = "bbob-jax"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 urls = {repository = "https://github.com/bessagroup/bbob-jax"}
 version = "1.5.0"
 
@@ -52,7 +53,7 @@ tests = [
 disallow_untyped_defs = true
 exclude = ["tests"]
 ignore_missing_imports = true
-python_version = "3.10"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 

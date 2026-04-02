@@ -7,6 +7,13 @@ import jax.random as jr
 from jaxtyping import PRNGKeyArray
 
 
+def _finite_like(x: jax.Array) -> jax.Array:
+    finfo = jnp.finfo(x.dtype)
+    return jnp.nan_to_num(
+        x, nan=0.0, posinf=finfo.max / 1e6, neginf=finfo.min / 1e6
+    )
+
+
 def fopt(key: PRNGKeyArray) -> jax.Array:
     """Generate a random optimal function value f_opt."""
     return jnp.round(
@@ -144,7 +151,8 @@ def griewank(x: jax.Array) -> jax.Array:
 def scaffer_f6(x: jax.Array, y: jax.Array) -> jax.Array:
     """Scaffer's F6 2D kernel. Minimum 0 at (0, 0). Accepts scalar inputs."""
     r2 = jnp.square(x) + jnp.square(y)
-    return 0.5 + (jnp.sin(jnp.sqrt(r2)) ** 2 - 0.5) / (1.0 + 0.001 * r2) ** 2
+    radius = jnp.sqrt(r2 + 1e-12)
+    return 0.5 + (jnp.sin(radius) ** 2 - 0.5) / (1.0 + 0.001 * r2) ** 2
 
 
 def cec2005_weierstrass(x: jax.Array) -> jax.Array:
@@ -178,50 +186,111 @@ def hybrid_composition(
     lambda_: jax.Array,
     bias: jax.Array,
     x_opt: jax.Array,
-    R: jax.Array,
-    Q: jax.Array,
+    M: jax.Array,
+    C: float = 2000.0,
 ) -> jax.Array:
     """Hybrid composition kernel for CEC 2005 F15-F25.
 
-    Applies double rotation per component: z_rot = Q[i] @ (R[i] @ z),
-    matching the CEC 2005 spec's use of two rotation matrices per component.
-    Callers that only need one rotation should pass Q=identity stack (F15).
+    Uses the CEC 2005 composition structure with a smooth winner-take-all
+    approximation so the public benchmark functions remain compatible with
+    ``jax.grad``. The exact paper rule is provided separately in
+    ``hybrid_composition_paper_exact``.
 
-    fns is a Python list of base functions — always bound as a Python constant
-    at construction time, never a JAX-traced argument. The Python loop over
-    num_components is unrolled at JIT trace time (num_components is fixed).
+    Paper structure:
+      z = ((x - o_i) / lambda_i) * M_i
+      fit_i = f_i(z)
+      f_max_i = f_i((y / lambda_i) * M_i), y = [5,...,5]
+      fit_i = C * fit_i / f_max_i
+      F(x) = sum(w_i * [fit_i + bias_i])
+
+    fns is a Python list of base functions — always bound as a
+    Python constant at construction time, never a JAX-traced
+    argument. The Python loop over num_components is unrolled at
+    JIT trace time (num_components is fixed).
 
     Args:
         x:        Input point, shape (ndim,)
-        fns:      Python list of num_components base functions (ndim,)->scalar
+        fns:      Python list of num_components base functions
         sigma:    Basin widths, shape (num_components,)
-        lambda_:  Per-component scaling (includes height normalization),
+        lambda_:  Per-component input stretch factors,
                   shape (num_components,)
-        bias:     Per-component offsets [0, 100, 200, ..., 900],
+        bias:     Per-component offsets [0, 100, ..., 900],
                   shape (num_components,)
         x_opt:    Component optima, shape (num_components, ndim)
-        R:        Per-component first rotation matrices,
+        M:        Per-component rotation matrices,
                   shape (num_c, ndim, ndim)
-        Q:        Per-component second rotation matrices,
-                  shape (num_c, ndim, ndim)
+        C:        Height normalization constant (default 2000).
     """
     ndim = x.shape[-1]
-    num_components = len(fns)  # Python constant — unrolled at trace time
+    num_components = len(fns)
 
-    # Weights via numerically stable softmax over negative squared distances.
-    # This avoids NaN gradients from division by very small w_sum values,
-    # which cause float32 overflow in the gradient when w_sum^2 underflows.
-    diffs = x[None, :] - x_opt  # (num_components, ndim)
-    dist_sq = jnp.sum(diffs**2, axis=-1)  # (num_components,)
-    log_w = -dist_sq / (2.0 * ndim * sigma**2)  # (num_components,)
-    w = jax.nn.softmax(log_w)  # numerically stable; gradient always finite
+    # --- Weights (CEC 2005 winner-take-all scheme) ---
+    diffs = x[None, :] - x_opt
+    dist_sq = jnp.sum(diffs**2, axis=-1)
+    log_w = -dist_sq / (2.0 * ndim * sigma**2)
+    log_w_max = jax.lax.stop_gradient(jnp.max(log_w))
+    w = jnp.exp(log_w - log_w_max)
+    # SW = sum before suppression (paper divides by this)
+    sw = jnp.sum(w)
+    w_max = jax.lax.stop_gradient(jnp.max(w))
+    # Smooth max indicator for differentiability
+    is_max = jax.nn.softmax(1e4 * (w - w_max))
+    suppression = 1.0 - jnp.clip(w_max, 0.0, 1.0) ** 10
+    w = w * (is_max + (1.0 - is_max) * suppression)
+    w = w / (sw + 1e-30)
 
-    # Evaluate each component (Python loop — unrolled at JIT trace time)
-    # Double rotation: Q[i] @ (R[i] @ z) per CEC 2005 spec
+    # --- Evaluate each component ---
+    y = 5.0 * jnp.ones(ndim)
+
     def component_value(i: int) -> jax.Array:
-        z = (x - x_opt[i]) / sigma[i]
-        z_rot = Q[i] @ (R[i] @ z)
-        return cast(jax.Array, lambda_[i] * fns[i](z_rot) + bias[i])
+        # z = ((x - o_i) / lambda_i) * M_i
+        z = M[i] @ ((x - x_opt[i]) / lambda_[i])
+        fit = _finite_like(fns[i](z))
+        # Height normalize: f_max = f_i((y / lambda_i) * M_i)
+        z_ref = M[i] @ (y / lambda_[i])
+        f_max = jnp.abs(_finite_like(fns[i](z_ref)))
+        use_norm = jnp.isfinite(f_max) & (f_max > 1e-30)
+        safe_f_max = jnp.where(use_norm, f_max, 1.0)
+        fit = jnp.where(use_norm, C * fit / safe_f_max, fit)
+        fit = _finite_like(fit)
+        return cast(jax.Array, fit + bias[i])
+
+    values = jnp.stack([component_value(i) for i in range(num_components)])
+    return jnp.sum(w * values)
+
+
+def hybrid_composition_paper_exact(
+    x: jax.Array,
+    fns: list,
+    sigma: jax.Array,
+    lambda_: jax.Array,
+    bias: jax.Array,
+    x_opt: jax.Array,
+    M: jax.Array,
+    C: float = 2000.0,
+) -> jax.Array:
+    """Reference implementation of the paper's exact composition rule."""
+    ndim = x.shape[-1]
+    num_components = len(fns)
+    diffs = x[None, :] - x_opt
+    dist_sq = jnp.sum(diffs**2, axis=-1)
+    w = jnp.exp(-dist_sq / (2.0 * ndim * sigma**2))
+    sw = jnp.sum(w)
+    max_w = jnp.max(w)
+    w = jnp.where(w == max_w, w, w * (1.0 - max_w**10))
+    w = w / (sw + 1e-30)
+    y = 5.0 * jnp.ones(ndim)
+
+    def component_value(i: int) -> jax.Array:
+        z = M[i] @ ((x - x_opt[i]) / lambda_[i])
+        fit = _finite_like(fns[i](z))
+        z_ref = M[i] @ (y / lambda_[i])
+        f_max = jnp.abs(_finite_like(fns[i](z_ref)))
+        use_norm = jnp.isfinite(f_max) & (f_max > 1e-30)
+        safe_f_max = jnp.where(use_norm, f_max, 1.0)
+        fit = jnp.where(use_norm, C * fit / safe_f_max, fit)
+        fit = _finite_like(fit)
+        return cast(jax.Array, fit + bias[i])
 
     values = jnp.stack([component_value(i) for i in range(num_components)])
     return jnp.sum(w * values)

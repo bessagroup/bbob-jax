@@ -11,6 +11,7 @@ import jax.random as jr
 import pytest
 
 from bbob_jax import cec2005_registry, cec2005_registry_original
+from bbob_jax._src.cec2005_tags import cec2005_function_characteristics
 from bbob_jax._src.utils import _create_mesh
 
 pytest_cec2005 = [
@@ -26,6 +27,11 @@ all_cec2005 = pytest_cec2005 + pytest_cec2005_original
 dimensions = [2, 3, 5, 10, 20]
 
 COMPOSITION_NAMES = [f"f{i}" for i in range(15, 26)]
+
+
+def _condition_number(matrix: jax.Array) -> jax.Array:
+    singular_values = jnp.linalg.svd(matrix, compute_uv=False)
+    return singular_values[0] / singular_values[-1]
 
 
 @pytest.mark.parametrize("name,fn", all_cec2005)
@@ -132,3 +138,100 @@ def test_composition_sanity(name, dim):
         pytest.skip(f"{name} not yet implemented")
     except Exception as e:
         pytest.fail(f"{name} sanity raised an exception: {e}")
+
+
+def test_f5_factory_uses_integer_nonsingular_matrix():
+    fn_func, _ = cec2005_registry["f5"](ndim=5, key=jr.key(0))
+    a = fn_func.keywords["R"]
+    assert jnp.all(a == jnp.round(a))
+    assert jnp.all(a >= -500)
+    assert jnp.all(a <= 500)
+    assert not jnp.isclose(jnp.linalg.det(a), 0.0)
+
+
+def test_f8_factory_places_odd_1_based_coordinates_on_boundary():
+    fn_func, _ = cec2005_registry["f8"](ndim=6, key=jr.key(0))
+    x_opt = fn_func.keywords["x_opt"]
+    assert jnp.all(x_opt[::2] == -32.0)
+
+
+def test_f18_factory_sets_last_component_optimum_to_zero():
+    fn_func, _ = cec2005_registry["f18"](ndim=5, key=jr.key(0))
+    x_opt = fn_func.keywords["x_opt"]
+    assert jnp.all(x_opt[9] == 0.0)
+
+
+def test_f20_factory_clamps_even_1_based_coordinates_only():
+    fn_func, _ = cec2005_registry["f20"](ndim=6, key=jr.key(0))
+    x_opt = fn_func.keywords["x_opt"]
+    assert jnp.all(x_opt[0, 1::2] == 5.0)
+    assert jnp.any(x_opt[0, ::2] != 5.0)
+
+
+def test_f25_optima_are_not_constrained_to_initialization_interval():
+    fn_func, _ = cec2005_registry["f25"](ndim=5, key=jr.key(0))
+    x_opt = fn_func.keywords["x_opt"]
+    assert jnp.any((x_opt < 2.0) | (x_opt > 5.0))
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("f8", 100.0),
+        ("f10", 2.0),
+        ("f11", 5.0),
+        ("f14", 3.0),
+    ],
+)
+def test_single_function_condition_numbers(name, expected):
+    fn_func, _ = cec2005_registry[name](ndim=8, key=jr.key(0))
+    condition_number = _condition_number(fn_func.keywords["R"])
+    assert jnp.isclose(condition_number, expected, rtol=5e-2)
+
+
+def test_f7_matrix_has_condition_number_three_after_scalar_scaling():
+    fn_func, _ = cec2005_registry["f7"](ndim=8, key=jr.key(0))
+    condition_number = _condition_number(fn_func.keywords["R"])
+    assert jnp.isclose(condition_number, 3.0, rtol=5e-2)
+
+
+def test_f16_component_condition_numbers_match_paper():
+    fn_func, _ = cec2005_registry["f16"](ndim=8, key=jr.key(0))
+    conds = jax.vmap(_condition_number)(fn_func.keywords["R"])
+    assert jnp.all(jnp.isclose(conds, 2.0, rtol=5e-2))
+
+
+def test_f18_component_condition_numbers_match_paper():
+    fn_func, _ = cec2005_registry["f18"](ndim=8, key=jr.key(0))
+    conds = jax.vmap(_condition_number)(fn_func.keywords["R"])
+    expected = jnp.array(
+        [2, 3, 2, 3, 2, 3, 20, 30, 200, 300], dtype=jnp.float32
+    )
+    assert jnp.all(jnp.isclose(conds, expected, rtol=5e-2))
+
+
+def test_f22_component_condition_numbers_match_paper():
+    fn_func, _ = cec2005_registry["f22"](ndim=8, key=jr.key(0))
+    conds = jax.vmap(_condition_number)(fn_func.keywords["R"])
+    expected = jnp.array(
+        [10, 20, 50, 100, 200, 1000, 2000, 3000, 4000, 5000],
+        dtype=jnp.float32,
+    )
+    assert jnp.all(jnp.isclose(conds, expected, rtol=8e-2))
+
+
+def test_f24_component_condition_numbers_match_paper():
+    fn_func, _ = cec2005_registry["f24"](ndim=8, key=jr.key(0))
+    conds = jax.vmap(_condition_number)(fn_func.keywords["R"])
+    expected = jnp.array(
+        [100, 50, 30, 10, 5, 5, 4, 3, 2, 2], dtype=jnp.float32
+    )
+    assert jnp.all(jnp.isclose(conds, expected, rtol=5e-2))
+
+
+def test_grad_safe_metadata_marks_retained_approximations():
+    assert cec2005_function_characteristics["f4"]["grad_safe_approximation"]
+    assert cec2005_function_characteristics["f17"]["grad_safe_approximation"]
+    assert cec2005_function_characteristics["f23"]["structure_modified"]
+    assert cec2005_function_characteristics["f24"]["structure_modified"]
+    assert cec2005_function_characteristics["f25"]["structure_modified"]

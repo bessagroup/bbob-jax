@@ -1,19 +1,24 @@
 """CEC 2005 benchmark functions implemented in JAX.
 
-IMPORTANT: This implementation replicates the CEC 2005 function FORMULAS only.
-Parameters (shift vectors, rotation matrices, auxiliary matrices) are generated
-from seeds rather than loaded from the official CEC 2005 data files. Results
-will NOT match published CEC 2005 benchmarking results. See each function's
-docstring for function-specific deviations.
+IMPORTANT: This implementation targets CEC 2005 formula parity where that can
+coexist with ``jax.grad`` compatibility. Parameters (shift vectors, rotation
+matrices, auxiliary matrices) are generated from seeds rather than loaded from
+the official CEC 2005 data files. Noise terms are omitted, and a few
+non-continuous or winner-take-all operations are replaced with smooth
+approximations so all public functions remain differentiable enough for JAX
+autodiff use. Results will NOT match published CEC 2005 benchmarking results.
+See each function's docstring and ``cec2005_function_characteristics`` for
+function-specific deviations.
 
 Reference: Suganthan et al. (2005), "Problem Definitions and Evaluation
 Criteria for the CEC 2005 Special Session on Real-Parameter Optimization."
 """
 
-from collections.abc import Callable
+from typing import cast
 
 import jax
 import jax.numpy as jnp
+import softjax as sj
 
 from bbob_jax._src.utils import (
     ackley,
@@ -513,7 +518,7 @@ def f13(
     jax.Array
         Function value(s).
     """
-    z = x - x_opt
+    z = x - x_opt + 1.0
     zi = z[:-1]
     zi1 = z[1:]
     rosen_vals = 100.0 * (zi**2 - zi1) ** 2 + (zi - 1.0) ** 2
@@ -563,12 +568,12 @@ def f14(
 
 
 def _rastrigin_base(z: jax.Array) -> jax.Array:
-    """Rastrigin without shift/offset for use as composition component."""
+    """Rastrigin without shift/offset for composition use."""
     return jnp.sum(z**2 - 10.0 * jnp.cos(2.0 * jnp.pi * z) + 10.0)
 
 
 def _elliptic_base(z: jax.Array) -> jax.Array:
-    """High conditioned elliptic without shift/rotation for composition use."""
+    """High conditioned elliptic for composition use."""
     ndim = z.shape[-1]
     exponents = jnp.arange(ndim, dtype=jnp.float32) / jnp.maximum(ndim - 1, 1)
     coeffs = 10.0 ** (6.0 * exponents)
@@ -579,19 +584,88 @@ def _sphere_base(z: jax.Array) -> jax.Array:
     return jnp.sum(z**2)
 
 
+def _expanded_scaffer_f6_base(z: jax.Array) -> jax.Array:
+    """Expanded Scaffer's F6 applied cyclically."""
+    pairs = jax.vmap(scaffer_f6)(z[:-1], z[1:])
+    last = scaffer_f6(z[-1], z[0])
+    return jnp.sum(pairs) + last
+
+
+def _f8f2_base(z: jax.Array) -> jax.Array:
+    """F8F2: Griewank composed with Rosenbrock, applied cyclically.
+
+    F2(x,y) = 100*(x^2 - y)^2 + (x - 1)^2
+    F8(t) = t^2/4000 - cos(t) + 1
+    Result = sum of F8(F2(z_i, z_{i+1})) cyclically.
+    """
+    z1 = z[:-1]
+    z2 = z[1:]
+    f2_vals = 100.0 * (z1**2 - z2) ** 2 + (z1 - 1.0) ** 2
+    f2_last = 100.0 * (z[-1] ** 2 - z[0]) ** 2 + (z[-1] - 1.0) ** 2
+    f2_all = jnp.concatenate([f2_vals, jnp.array([f2_last])])
+    f8_vals = f2_all**2 / 4000.0 - jnp.cos(f2_all) + 1.0
+    return jnp.sum(f8_vals)
+
+
+def _soft_round_input(z: jax.Array) -> jax.Array:
+    """Apply soft rounding: y_j = round(2*x_j)/2 if |x_j|>=0.5."""
+    diff = sj.abs(z) - 0.5
+    mask = sj.heaviside(diff)
+    z_rounded = sj.round(2.0 * z) / 2.0
+    return cast(jax.Array, mask * z_rounded + (1.0 - mask) * z)
+
+
+def _non_continuous_scaffer_f6_base(z: jax.Array) -> jax.Array:
+    """Non-continuous Expanded Scaffer's F6 with soft rounding."""
+    y = _soft_round_input(z)
+    return _expanded_scaffer_f6_base(y)
+
+
+def _non_continuous_rastrigin_base(z: jax.Array) -> jax.Array:
+    """Non-continuous Rastrigin with soft rounding."""
+    y = _soft_round_input(z)
+    return _rastrigin_base(y)
+
+
+def _sphere_noisy_base(z: jax.Array) -> jax.Array:
+    """Sphere (noise omitted for jax.grad compatibility)."""
+    return jnp.sum(z**2)
+
+
 def _composition_bias() -> jax.Array:
     return jnp.array(
-        [0.0, 100.0, 200.0, 300.0, 400.0, 500.0, 600.0, 700.0, 800.0, 900.0]
+        [
+            0.0,
+            100.0,
+            200.0,
+            300.0,
+            400.0,
+            500.0,
+            600.0,
+            700.0,
+            800.0,
+            900.0,
+        ]
     )
 
 
-def _height_normalize(
-    fn: Callable[[jax.Array], jax.Array], ndim: int, c: float = 2000.0
-) -> jax.Array:
-    """Compute lambda_ for height normalization: c / |fn(5*ones(ndim))|."""
-    ref = 5.0 * jnp.ones(ndim)
-    val = jnp.abs(fn(ref))
-    return jnp.where(val > 0.0, c / val, 1.0)
+# --- Component function lists per composition group ---
+
+
+def _composition1_fns() -> list:
+    """F15/F16/F17: Rast, Weier, Griew, Ackley, Sphere."""
+    return [
+        _rastrigin_base,
+        _rastrigin_base,
+        cec2005_weierstrass,
+        cec2005_weierstrass,
+        griewank,
+        griewank,
+        ackley,
+        ackley,
+        _sphere_base,
+        _sphere_base,
+    ]
 
 
 def f15(
@@ -603,8 +677,8 @@ def f15(
 ) -> jax.Array:
     """Hybrid Composition Function 1 (F15).
 
-    Ten Rastrigin components without rotation (identity matrices per CEC 2005
-    spec). ``sigma=[1]*10``.
+    Ten mixed components (Rastrigin, Weierstrass, Griewank, Ackley,
+    Sphere) without rotation (identity matrices). ``sigma=[1]*10``.
 
     ![F15 3D surface](img/3d/f15.png){ width=30% }
     ![F15 2D surface](img/2d/f15.png){ width=30% }
@@ -618,10 +692,9 @@ def f15(
     f_opt : jax.Array
         Optimal function value offset.
     R : jax.Array
-        Rotation matrix stack (overridden internally with identity matrices).
+        Rotation matrix stack (overridden with identity).
     Q : jax.Array
-        Second rotation matrix stack (overridden internally with identity
-        matrices).
+        Unused.
 
     Returns
     -------
@@ -629,20 +702,25 @@ def f15(
         Function value(s).
     """
     ndim = x.shape[-1]
-    nc = 10
-    fns = [_rastrigin_base] * nc
-    sigma = jnp.ones(nc)
-    lam_val = _height_normalize(_rastrigin_base, ndim)
-    lambda_ = jnp.full(nc, lam_val)
-    bias = _composition_bias()
-    # F15 has no rotation: override R and Q with identity stacks
-    eye_stack = jnp.stack([jnp.eye(ndim)] * nc)
-    return (
-        hybrid_composition(
-            x, fns, sigma, lambda_, bias, x_opt, eye_stack, eye_stack
-        )
-        + f_opt
+    fns = _composition1_fns()
+    sigma = jnp.ones(10)
+    lambda_ = jnp.array(
+        [
+            1,
+            1,
+            10,
+            10,
+            5 / 60,
+            5 / 60,
+            5 / 32,
+            5 / 32,
+            5 / 100,
+            5 / 100,
+        ]
     )
+    bias = _composition_bias()
+    eye = jnp.stack([jnp.eye(ndim)] * 10)
+    return hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, eye) + f_opt
 
 
 def f16(
@@ -654,7 +732,7 @@ def f16(
 ) -> jax.Array:
     """Rotated Hybrid Composition Function 1 (F16).
 
-    Ten Rastrigin components with rotation. ``sigma=[1]*10``.
+    Same as F15 but with rotation matrices (condition number 2).
 
     ![F16 3D surface](img/3d/f16.png){ width=30% }
     ![F16 2D surface](img/2d/f16.png){ width=30% }
@@ -670,23 +748,31 @@ def f16(
     R : jax.Array
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
-        Stack of second rotation matrices of shape (10, ndim, ndim).
+        Unused.
 
     Returns
     -------
     jax.Array
         Function value(s).
     """
-    ndim = x.shape[-1]
-    nc = 10
-    fns = [_rastrigin_base] * nc
-    sigma = jnp.ones(nc)
-    lam_val = _height_normalize(_rastrigin_base, ndim)
-    lambda_ = jnp.full(nc, lam_val)
-    bias = _composition_bias()
-    return (
-        hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R, Q) + f_opt
+    fns = _composition1_fns()
+    sigma = jnp.ones(10)
+    lambda_ = jnp.array(
+        [
+            1,
+            1,
+            10,
+            10,
+            5 / 60,
+            5 / 60,
+            5 / 32,
+            5 / 32,
+            5 / 100,
+            5 / 100,
+        ]
     )
+    bias = _composition_bias()
+    return hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R) + f_opt
 
 
 def f17(
@@ -698,9 +784,8 @@ def f17(
 ) -> jax.Array:
     """Rotated Hybrid Composition Function 1 with Noise (F17).
 
-    Noise-free version of F17 for ``jax.grad`` compatibility. The official
-    CEC 2005 F17 adds noise ``f(x) * (1 + 0.2*|N(0,1)|)``, which is omitted
-    here (``noise_omitted=True`` in ``cec2005_function_characteristics``).
+    Noise-free version for ``jax.grad`` compatibility.
+    ``noise_omitted=True`` in ``cec2005_function_characteristics``.
 
     ![F17 3D surface](img/3d/f17.png){ width=30% }
     ![F17 2D surface](img/2d/f17.png){ width=30% }
@@ -716,7 +801,7 @@ def f17(
     R : jax.Array
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
-        Stack of second rotation matrices of shape (10, ndim, ndim).
+        Unused.
 
     Returns
     -------
@@ -727,14 +812,14 @@ def f17(
 
 
 def _composition2_fns() -> list:
-    """Return 10 component functions for Composition 2 (F18-F20)."""
+    """F18/F19/F20: Ackley, Rast, Sphere, Weier, Griew."""
     return [
         ackley,
         ackley,
         _rastrigin_base,
         _rastrigin_base,
-        _elliptic_base,
-        _elliptic_base,
+        _sphere_base,
+        _sphere_base,
         cec2005_weierstrass,
         cec2005_weierstrass,
         griewank,
@@ -751,8 +836,8 @@ def f18(
 ) -> jax.Array:
     """Rotated Hybrid Composition Function 2 (F18).
 
-    Ten mixed components (Ackley, Rastrigin, Elliptic, Weierstrass, Griewank)
-    with ``sigma=[1,1,1,1,1,2,2,2,2,2]``.
+    Ten mixed components (Ackley, Rastrigin, Sphere, Weierstrass,
+    Griewank). ``o10 = [0,...,0]`` sets a local optimum at origin.
 
     ![F18 3D surface](img/3d/f18.png){ width=30% }
     ![F18 2D surface](img/2d/f18.png){ width=30% }
@@ -768,22 +853,44 @@ def f18(
     R : jax.Array
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
-        Stack of second rotation matrices of shape (10, ndim, ndim).
+        Unused.
 
     Returns
     -------
     jax.Array
         Function value(s).
     """
-    ndim = x.shape[-1]
-    nc = 10
     fns = _composition2_fns()
-    sigma = jnp.array([1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0])
-    lambda_ = jnp.array([_height_normalize(fns[i], ndim) for i in range(nc)])
-    bias = _composition_bias()
-    return (
-        hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R, Q) + f_opt
+    sigma = jnp.array(
+        [
+            1.0,
+            2.0,
+            1.5,
+            1.5,
+            1.0,
+            1.0,
+            1.5,
+            1.5,
+            2.0,
+            2.0,
+        ]
     )
+    lambda_ = jnp.array(
+        [
+            2 * 5 / 32,
+            5 / 32,
+            2 * 1,
+            1,
+            2 * 5 / 100,
+            5 / 100,
+            2 * 10,
+            10,
+            2 * 5 / 60,
+            5 / 60,
+        ]
+    )
+    bias = _composition_bias()
+    return hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R) + f_opt
 
 
 def f19(
@@ -793,10 +900,10 @@ def f19(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """Rotated Hybrid Composition Function 2 with Narrow Basin (F19).
+    """Rotated Hybrid Composition Function 2, Narrow Basin (F19).
 
-    Identical to F18 but with ``sigma[0]=0.1``, creating a narrow basin for
-    the first component.
+    Same as F18 but with ``sigma[0]=0.1`` and ``lambda[0]``
+    scaled by 0.1.
 
     ![F19 3D surface](img/3d/f19.png){ width=30% }
     ![F19 2D surface](img/2d/f19.png){ width=30% }
@@ -812,22 +919,44 @@ def f19(
     R : jax.Array
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
-        Stack of second rotation matrices of shape (10, ndim, ndim).
+        Unused.
 
     Returns
     -------
     jax.Array
         Function value(s).
     """
-    ndim = x.shape[-1]
-    nc = 10
     fns = _composition2_fns()
-    sigma = jnp.array([0.1, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0, 2.0, 2.0, 2.0])
-    lambda_ = jnp.array([_height_normalize(fns[i], ndim) for i in range(nc)])
-    bias = _composition_bias()
-    return (
-        hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R, Q) + f_opt
+    sigma = jnp.array(
+        [
+            0.1,
+            2.0,
+            1.5,
+            1.5,
+            1.0,
+            1.0,
+            1.5,
+            1.5,
+            2.0,
+            2.0,
+        ]
     )
+    lambda_ = jnp.array(
+        [
+            0.1 * 5 / 32,
+            5 / 32,
+            2 * 1,
+            1,
+            2 * 5 / 100,
+            5 / 100,
+            2 * 10,
+            10,
+            2 * 5 / 60,
+            5 / 60,
+        ]
+    )
+    bias = _composition_bias()
+    return hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R) + f_opt
 
 
 def f20(
@@ -839,9 +968,8 @@ def f20(
 ) -> jax.Array:
     """Hybrid Composition 2 with Global Optimum on Bounds (F20).
 
-    In the CEC 2005 spec, x_opt[0] is clamped to the search boundary. Here,
-    x_opt is sampled from [-100, 100] as parameters are seed-generated rather
-    than loaded from official data files. Formula is identical to F18.
+    Same as F18. x_opt[0] has even-indexed dims (1-based) set to 5
+    by the registry factory.
 
     ![F20 3D surface](img/3d/f20.png){ width=30% }
     ![F20 2D surface](img/2d/f20.png){ width=30% }
@@ -857,7 +985,7 @@ def f20(
     R : jax.Array
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
-        Stack of second rotation matrices of shape (10, ndim, ndim).
+        Unused.
 
     Returns
     -------
@@ -868,18 +996,34 @@ def f20(
 
 
 def _composition3_fns() -> list:
-    """Return 10 component functions for Composition 3 (F21-F23)."""
+    """F21/F22/F23: Scaffer, Rast, F8F2, Weier, Griew."""
     return [
+        _expanded_scaffer_f6_base,
+        _expanded_scaffer_f6_base,
         _rastrigin_base,
         _rastrigin_base,
+        _f8f2_base,
+        _f8f2_base,
         cec2005_weierstrass,
         cec2005_weierstrass,
         griewank,
         griewank,
+    ]
+
+
+def _composition4_fns() -> list:
+    """F24/F25: 10 different components."""
+    return [
+        cec2005_weierstrass,
+        _expanded_scaffer_f6_base,
+        _f8f2_base,
         ackley,
-        ackley,
-        _sphere_base,
-        _sphere_base,
+        _rastrigin_base,
+        griewank,
+        _non_continuous_scaffer_f6_base,
+        _non_continuous_rastrigin_base,
+        _elliptic_base,
+        _sphere_noisy_base,
     ]
 
 
@@ -892,8 +1036,8 @@ def f21(
 ) -> jax.Array:
     """Rotated Hybrid Composition Function 3 (F21).
 
-    Ten mixed components (Rastrigin, Weierstrass, Griewank, Ackley, Sphere)
-    with ``sigma=[1]*10``.
+    Ten mixed components (Scaffer's F6, Rastrigin, F8F2,
+    Weierstrass, Griewank).
 
     ![F21 3D surface](img/3d/f21.png){ width=30% }
     ![F21 2D surface](img/2d/f21.png){ width=30% }
@@ -909,22 +1053,44 @@ def f21(
     R : jax.Array
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
-        Stack of second rotation matrices of shape (10, ndim, ndim).
+        Unused.
 
     Returns
     -------
     jax.Array
         Function value(s).
     """
-    ndim = x.shape[-1]
-    nc = 10
     fns = _composition3_fns()
-    sigma = jnp.ones(nc)
-    lambda_ = jnp.array([_height_normalize(fns[i], ndim) for i in range(nc)])
-    bias = _composition_bias()
-    return (
-        hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R, Q) + f_opt
+    sigma = jnp.array(
+        [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            2.0,
+            2.0,
+            2.0,
+            2.0,
+            2.0,
+        ]
     )
+    lambda_ = jnp.array(
+        [
+            5 * 5 / 100,
+            5 / 100,
+            5 * 1,
+            1,
+            5 * 1,
+            1,
+            5 * 10,
+            10,
+            5 * 5 / 200,
+            5 / 200,
+        ]
+    )
+    bias = _composition_bias()
+    return hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R) + f_opt
 
 
 def f22(
@@ -934,12 +1100,10 @@ def f22(
     R: jax.Array,
     Q: jax.Array,
 ) -> jax.Array:
-    """Rotated Hybrid Composition 3 with High Condition Number Matrix (F22).
+    """Rotated Hybrid Composition 3, High Condition Number (F22).
 
-    In the official CEC 2005 spec, one component's rotation matrix is replaced
-    with an ill-conditioned matrix. Here, standard rotation matrices are used
-    and ``lambda_[0]`` is boosted by a factor of 10 to approximate the
-    high-condition effect.
+    Same as F21 but the factory supplies high-condition-number matrices
+    [10, 20, 50, 100, 200, 1000, 2000, 3000, 4000, 5000].
 
     ![F22 3D surface](img/3d/f22.png){ width=30% }
     ![F22 2D surface](img/2d/f22.png){ width=30% }
@@ -955,24 +1119,44 @@ def f22(
     R : jax.Array
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
-        Stack of second rotation matrices of shape (10, ndim, ndim).
+        Unused.
 
     Returns
     -------
     jax.Array
         Function value(s).
     """
-    ndim = x.shape[-1]
-    nc = 10
     fns = _composition3_fns()
-    sigma = jnp.ones(nc)
-    lambda_ = jnp.array([_height_normalize(fns[i], ndim) for i in range(nc)])
-    # Boost first component to approximate high-condition effect
-    lambda_ = lambda_.at[0].multiply(10.0)
-    bias = _composition_bias()
-    return (
-        hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R, Q) + f_opt
+    sigma = jnp.array(
+        [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            2.0,
+            2.0,
+            2.0,
+            2.0,
+            2.0,
+        ]
     )
+    lambda_ = jnp.array(
+        [
+            5 * 5 / 100,
+            5 / 100,
+            5 * 1,
+            1,
+            5 * 1,
+            1,
+            5 * 10,
+            10,
+            5 * 5 / 200,
+            5 / 200,
+        ]
+    )
+    bias = _composition_bias()
+    return hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R) + f_opt
 
 
 def f23(
@@ -984,11 +1168,8 @@ def f23(
 ) -> jax.Array:
     """Non-Continuous Rotated Hybrid Composition Function 3 (F23).
 
-    Continuous version of F23 for ``jax.grad`` compatibility. The official
-    CEC 2005 F23 applies a rounding step
-    ``y_i = round(2*x_i)/2 if |x_i - x_opt_i| >= 0.5 else x_i``, which is
-    omitted here (``structure_modified=True`` in
-    ``cec2005_function_characteristics``). Formula is identical to F21.
+    Same as F21 but with soft rounding applied to x before
+    evaluation. Uses ``softjax`` for ``jax.grad`` compatibility.
 
     ![F23 3D surface](img/3d/f23.png){ width=30% }
     ![F23 2D surface](img/2d/f23.png){ width=30% }
@@ -1004,14 +1185,20 @@ def f23(
     R : jax.Array
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
-        Stack of second rotation matrices of shape (10, ndim, ndim).
+        Unused.
 
     Returns
     -------
     jax.Array
         Function value(s).
     """
-    return f21(x, x_opt, f_opt, R, Q)
+    # Soft rounding: y_j = round(2*x_j)/2 if |x_j - o1_j| >= 0.5
+    o = x_opt[0]
+    diff = sj.abs(x - o) - 0.5
+    mask = sj.heaviside(diff)
+    x_rounded = sj.round(2.0 * x) / 2.0
+    y = mask * x_rounded + (1.0 - mask) * x
+    return f21(y, x_opt, f_opt, R, Q)
 
 
 def f24(
@@ -1023,7 +1210,11 @@ def f24(
 ) -> jax.Array:
     """Rotated Hybrid Composition Function 4 (F24).
 
-    Same components as F21 with ``sigma=[2]*10`` (wider basins).
+    Ten different components including non-continuous variants.
+    Rotation matrices with condition numbers
+    [100, 50, 30, 10, 5, 5, 4, 3, 2, 2] are supplied by the factory.
+    The noisy sphere component and the non-continuous components are smoothed
+    for ``jax.grad`` compatibility.
 
     ![F24 3D surface](img/3d/f24.png){ width=30% }
     ![F24 2D surface](img/2d/f24.png){ width=30% }
@@ -1039,22 +1230,31 @@ def f24(
     R : jax.Array
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
-        Stack of second rotation matrices of shape (10, ndim, ndim).
+        Unused.
 
     Returns
     -------
     jax.Array
         Function value(s).
     """
-    ndim = x.shape[-1]
-    nc = 10
-    fns = _composition3_fns()
-    sigma = jnp.full(nc, 2.0)
-    lambda_ = jnp.array([_height_normalize(fns[i], ndim) for i in range(nc)])
-    bias = _composition_bias()
-    return (
-        hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R, Q) + f_opt
+    fns = _composition4_fns()
+    sigma = jnp.full(10, 2.0)
+    lambda_ = jnp.array(
+        [
+            10,
+            5 / 20,
+            1,
+            5 / 32,
+            1,
+            5 / 100,
+            5 / 50,
+            1,
+            5 / 100,
+            5 / 100,
+        ]
     )
+    bias = _composition_bias()
+    return hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R) + f_opt
 
 
 def f25(
@@ -1066,7 +1266,9 @@ def f25(
 ) -> jax.Array:
     """Rotated Hybrid Composition Function 4 without Bounds (F25).
 
-    Identical to F24 — neither F24 nor F25 applies a boundary penalty.
+    Identical to F24. In the paper, this function differs only by the
+    initialization range. The implementation keeps the same function formula
+    while not constraining component optima to the initialization interval.
 
     ![F25 3D surface](img/3d/f25.png){ width=30% }
     ![F25 2D surface](img/2d/f25.png){ width=30% }
@@ -1082,7 +1284,7 @@ def f25(
     R : jax.Array
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
-        Stack of second rotation matrices of shape (10, ndim, ndim).
+        Unused.
 
     Returns
     -------
