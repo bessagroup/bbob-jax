@@ -6,6 +6,7 @@ BBOB Benchmark set for Jax - BBOB Benchmark function implemented in JAX
 # =============================================================================
 
 # Standard
+from bbob_jax import bounds
 from bbob_jax._src.bbob import (
     attractive_sector,
     bent_cigar,
@@ -53,6 +54,7 @@ __status__ = "Stable"
 
 __all__ = [
     "registry",
+    "bounds",
     "registry_original",
     "function_characteristics",
     "cec2005_registry",
