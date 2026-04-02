@@ -33,9 +33,9 @@ theme:
     # bluesky_url: "https://PatrickKidger.bsky.social"
 
 site_name: bbob-jax
-site_description: The documentation for the f3dasm library.
+site_description: JAX implementations of BBOB and CEC 2005 benchmark functions for black-box optimization.
 site_author: Martin van der Schelling
-site_url: https://f3dasm.readthedocs.io/en/latest/
+site_url: https://bbob-jax.readthedocs.io/
 
 repo_url: https://github.com/bessagroup/bbob-jax
 repo_name: bessagroup/bbob-jax

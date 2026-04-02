@@ -1,11 +1,11 @@
-# BBOB Benchmark set for JAX
+# Benchmark Functions for JAX
 
 | [**GitHub**](https://github.com/bessagroup/bbob-jax)
 | [**PyPI**](https://pypi.org/project/bbob-jax/)
 | [**Documentation**](https://bbob-jax.readthedocs.io/)
 | [**Zenodo**](https://doi.org/10.5281/zenodo.17426894) 
 
-JAX implementation of the BBOB Benchmark functions for black-box optimization, based on the original definitions by Finck et al. (2009) [^1].
+JAX implementations of the **BBOB** benchmark functions (Finck et al., 2009) [^1] and the **CEC 2005** benchmark functions (Suganthan et al., 2005) [^4] for black-box optimization.
 
 **First publication:** October 17, 2025
 
@@ -13,7 +13,7 @@ JAX implementation of the BBOB Benchmark functions for black-box optimization, b
 
 ## Statement of need
 
-This repository provides the original BBOB 24 noise-free, real-parameter, single-objective benchmark functions reimplemented in JAX. Originally written in C, these functions have been translated to JAX to enable automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance; making them ideal for research in optimization, machine learning, and evolutionary algorithms.
+The BBOB and CEC 2005 benchmark suites are cornerstones of black-box optimization research. This repository provides JAX reimplementations of both: the 24 BBOB noise-free functions originally written in C, and the 25 CEC 2005 real-parameter functions. Translating these suites to JAX enables automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance — making them ideal for research in optimization, machine learning, and evolutionary algorithms.
 
 <div align="center">
   <img src="img/bbob_functions_overview_3d.png" alt="BBOB functions 3D overview" width="80%">
@@ -23,6 +23,14 @@ This repository provides the original BBOB 24 noise-free, real-parameter, single
   <img src="img/bbob_functions_overview_2d.png" alt="BBOB functions 2D overview" width="80%">
   <br>
   <em>2D contour plots of the 24 BBOB benchmark functions.</em>
+  <br><br>
+  <img src="img/cec2005_functions_overview_3d.png" alt="CEC 2005 functions 3D overview" width="80%">
+  <br>
+  <em>3D surface plots of the 25 CEC 2005 benchmark functions.</em>
+  <br><br>
+  <img src="img/cec2005_functions_overview_2d.png" alt="CEC 2005 functions 2D overview" width="80%">
+  <br>
+  <em>2D contour plots of the 25 CEC 2005 benchmark functions.</em>
 </div>
 
 ## Authorship & Citation
@@ -88,3 +96,5 @@ This project is licensed under the BSD 3-Clause License. See [LICENSE](https://g
 [^2]: Hansen, N., Auger, A., Ros, R., Mersmann, O., Tušar, T., and Brockhoff, D. (2021), COCO: A Platform for Comparing Continuous Optimizers in a Black-Box Setting. Optimization Methods and Software, 36(1), 114–144. https://doi.org/10.1080/10556788.2020.1808977
 
 [^3]: Lange, R. T. (2022), evosax: JAX-based Evolution Strategies. arXiv preprint [arXiv:2212.04180](https://arxiv.org/abs/2212.04180).
+
+[^4]: Suganthan, P. N., Hansen, N., Liang, J. J., and Deb, K. (2005), Problem Definitions and Evaluation Criteria for the CEC 2005 Special Session on Real-Parameter Optimization.
