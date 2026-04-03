@@ -14,6 +14,12 @@ from bbob_jax import cec2005_registry, cec2005_registry_original
 from bbob_jax._src.cec2005_tags import cec2005_function_characteristics
 from bbob_jax._src.utils import _create_mesh
 
+_NOISY = {
+    name
+    for name, chars in cec2005_function_characteristics.items()
+    if chars.get("noise", False)
+}
+
 pytest_cec2005 = [
     pytest.param(name, fn, id=f"cec2005_registry::{name}")
     for name, fn in cec2005_registry.items()
@@ -41,7 +47,7 @@ def test_function_output(name, fn, dim):
     x = jr.uniform(key, shape=(dim,), minval=-100.0, maxval=100.0)
     try:
         fn_func, _ = fn(ndim=dim, key=key)
-        y = fn_func(x)
+        y = fn_func(x, jr.key(42)) if name in _NOISY else fn_func(x)
     except NotImplementedError:
         pytest.skip(f"Function {name} not yet implemented")
     except Exception as e:
@@ -57,7 +63,10 @@ def test_function_output_jit(name, fn, dim):
     x = jr.uniform(key, shape=(dim,), minval=-100.0, maxval=100.0)
     try:
         fn_func, _ = fn(ndim=dim, key=key)
-        y = jax.jit(fn_func)(x)
+        if name in _NOISY:
+            y = jax.jit(fn_func)(x, jr.key(42))
+        else:
+            y = jax.jit(fn_func)(x)
     except NotImplementedError:
         pytest.skip(f"Function {name} JIT not yet implemented")
     except Exception as e:
@@ -73,7 +82,11 @@ def test_function_vmap(name, fn, dim, seed):
     key = jr.key(seed)
     try:
         fn_func, _ = fn(ndim=dim, key=key)
-        _, _, Z = _create_mesh(fn_func, bounds=(-100.0, 100.0), px=50)
+        if name in _NOISY:
+            eval_fn = lambda x: fn_func(x, jr.key(42))
+        else:
+            eval_fn = fn_func
+        _, _, Z = _create_mesh(eval_fn, bounds=(-100.0, 100.0), px=50)
     except NotImplementedError:
         pytest.skip(f"Function {name} vmap not yet implemented")
     except Exception as e:
@@ -90,7 +103,10 @@ def test_function_grad(name, fn, dim, seed):
     x = jr.uniform(key_x, shape=(10, dim), minval=-100.0, maxval=100.0)
     try:
         fn_func, _ = fn(ndim=dim, key=key_fn)
-        grad_fn = jax.grad(fn_func)
+        if name in _NOISY:
+            grad_fn = jax.grad(lambda x: fn_func(x, jr.key(42)))
+        else:
+            grad_fn = jax.grad(fn_func)
         grad_value = jax.vmap(grad_fn)(x)
     except NotImplementedError:
         pytest.skip(f"Function {name} grad not yet implemented")
@@ -124,9 +140,14 @@ def test_composition_sanity(name, dim):
     fn_func, _ = fn_factory(ndim=dim, key=jr.key(0))
     x_test = jnp.zeros(dim)
     try:
-        result = fn_func(x_test)
-        assert jnp.isfinite(result), f"{name} sanity: non-finite at zeros"
-        grad = jax.grad(fn_func)(x_test)
+        if name in _NOISY:
+            result = fn_func(x_test, jr.key(42))
+            assert jnp.isfinite(result), f"{name} sanity: non-finite at zeros"
+            grad = jax.grad(lambda x: fn_func(x, jr.key(42)))(x_test)
+        else:
+            result = fn_func(x_test)
+            assert jnp.isfinite(result), f"{name} sanity: non-finite at zeros"
+            grad = jax.grad(fn_func)(x_test)
         grad_norm = jnp.linalg.norm(grad)
         assert jnp.isfinite(grad_norm), f"{name} sanity: non-finite gradient"
         # 5e9 is ~2x above the empirically observed max (~2.4e9 for F21-F23 at
@@ -229,9 +250,16 @@ def test_f24_component_condition_numbers_match_paper():
     assert jnp.all(jnp.isclose(conds, expected, rtol=5e-2))
 
 
-def test_grad_safe_metadata_marks_retained_approximations():
-    assert cec2005_function_characteristics["f4"]["grad_safe_approximation"]
-    assert cec2005_function_characteristics["f17"]["grad_safe_approximation"]
+def test_noise_metadata_marks_stochastic_functions():
+    assert cec2005_function_characteristics["f4"]["noise"]
+    assert cec2005_function_characteristics["f17"]["noise"]
+    assert cec2005_function_characteristics["f24"]["noise"]
+    assert cec2005_function_characteristics["f25"]["noise"]
+    assert not cec2005_function_characteristics["f1"]["noise"]
+    assert not cec2005_function_characteristics["f16"]["noise"]
+
+
+def test_structure_modified_metadata():
     assert cec2005_function_characteristics["f23"]["structure_modified"]
     assert cec2005_function_characteristics["f24"]["structure_modified"]
     assert cec2005_function_characteristics["f25"]["structure_modified"]

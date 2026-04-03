@@ -3,10 +3,11 @@
 IMPORTANT: This implementation targets CEC 2005 formula parity where that can
 coexist with ``jax.grad`` compatibility. Parameters (shift vectors, rotation
 matrices, auxiliary matrices) are generated from seeds rather than loaded from
-the official CEC 2005 data files. Noise terms are omitted, and a few
-non-continuous or winner-take-all operations are replaced with smooth
-approximations so all public functions remain differentiable enough for JAX
-autodiff use. Results will NOT match published CEC 2005 benchmarking results.
+the official CEC 2005 data files. A few non-continuous or winner-take-all
+operations are replaced with smooth approximations so all public functions
+remain differentiable enough for JAX autodiff use. Functions with stochastic
+noise (F4, F17, F24, F25) require a JAX PRNGKey as a second argument.
+Results will NOT match published CEC 2005 benchmarking results.
 See each function's docstring and ``cec2005_function_characteristics`` for
 function-specific deviations.
 
@@ -18,6 +19,7 @@ from typing import cast
 
 import jax
 import jax.numpy as jnp
+import jax.random as jr
 import softjax as sj
 
 from bbob_jax._src.utils import (
@@ -146,6 +148,7 @@ def f3(
 
 def f4(
     x: jax.Array,
+    key: jax.Array,
     x_opt: jax.Array,
     f_opt: jax.Array,
     R: jax.Array,
@@ -153,10 +156,7 @@ def f4(
 ) -> jax.Array:
     """Shifted Schwefel 1.2 with Noise (F4).
 
-    Noise-free version of F4 for ``jax.grad`` compatibility. The official
-    CEC 2005 F4 adds Gaussian noise ``f(x) * (1 + 0.4*N(0,1))``, which is
-    omitted here (``noise_omitted=True`` in
-    ``cec2005_function_characteristics``).
+    Applies multiplicative Gaussian noise: ``f(x) * (1 + 0.4 * N(0,1))``.
 
     ![F4 3D surface](img/3d/f4.png){ width=30% }
     ![F4 2D surface](img/2d/f4.png){ width=30% }
@@ -165,6 +165,8 @@ def f4(
     ----------
     x : jax.Array
         Input array of shape (..., ndim).
+    key : jax.Array
+        JAX PRNGKey for stochastic noise.
     x_opt : jax.Array
         Optimal point.
     f_opt : jax.Array
@@ -180,7 +182,8 @@ def f4(
         Function value(s).
     """
     z = x - x_opt
-    return jnp.sum(jnp.cumsum(z) ** 2) + f_opt
+    base = jnp.sum(jnp.cumsum(z) ** 2)
+    return base * (1 + 0.4 * jr.normal(key, shape=())) + f_opt
 
 
 def f5(
@@ -627,9 +630,9 @@ def _non_continuous_rastrigin_base(z: jax.Array) -> jax.Array:
     return _rastrigin_base(y)
 
 
-def _sphere_noisy_base(z: jax.Array) -> jax.Array:
-    """Sphere (noise omitted for jax.grad compatibility)."""
-    return jnp.sum(z**2)
+def _sphere_noisy_base(z: jax.Array, key: jax.Array) -> jax.Array:
+    """Sphere with multiplicative absolute Gaussian noise."""
+    return jnp.sum(z**2) * (1 + 0.01 * jnp.abs(jr.normal(key, shape=())))
 
 
 def _composition_bias() -> jax.Array:
@@ -777,6 +780,7 @@ def f16(
 
 def f17(
     x: jax.Array,
+    key: jax.Array,
     x_opt: jax.Array,
     f_opt: jax.Array,
     R: jax.Array,
@@ -784,8 +788,8 @@ def f17(
 ) -> jax.Array:
     """Rotated Hybrid Composition Function 1 with Noise (F17).
 
-    Noise-free version for ``jax.grad`` compatibility.
-    ``noise_omitted=True`` in ``cec2005_function_characteristics``.
+    Applies multiplicative absolute Gaussian noise to the base F16 result:
+    ``f(x) * (1 + 0.4 * |N(0,1)|)``.
 
     ![F17 3D surface](img/3d/f17.png){ width=30% }
     ![F17 2D surface](img/2d/f17.png){ width=30% }
@@ -794,6 +798,8 @@ def f17(
     ----------
     x : jax.Array
         Input array of shape (..., ndim).
+    key : jax.Array
+        JAX PRNGKey for stochastic noise.
     x_opt : jax.Array
         Matrix of component optima of shape (10, ndim).
     f_opt : jax.Array
@@ -808,7 +814,8 @@ def f17(
     jax.Array
         Function value(s).
     """
-    return f16(x, x_opt, f_opt, R, Q)
+    base = f16(x, x_opt, f_opt, R, Q) - f_opt
+    return base * (1 + 0.4 * jnp.abs(jr.normal(key, shape=()))) + f_opt
 
 
 def _composition2_fns() -> list:
@@ -1203,6 +1210,7 @@ def f23(
 
 def f24(
     x: jax.Array,
+    key: jax.Array,
     x_opt: jax.Array,
     f_opt: jax.Array,
     R: jax.Array,
@@ -1213,8 +1221,8 @@ def f24(
     Ten different components including non-continuous variants.
     Rotation matrices with condition numbers
     [100, 50, 30, 10, 5, 5, 4, 3, 2, 2] are supplied by the factory.
-    The noisy sphere component and the non-continuous components are smoothed
-    for ``jax.grad`` compatibility.
+    The 10th component (noisy sphere) applies multiplicative absolute
+    Gaussian noise: ``sphere(z) * (1 + 0.01 * |N(0,1)|)``.
 
     ![F24 3D surface](img/3d/f24.png){ width=30% }
     ![F24 2D surface](img/2d/f24.png){ width=30% }
@@ -1223,6 +1231,8 @@ def f24(
     ----------
     x : jax.Array
         Input array of shape (..., ndim).
+    key : jax.Array
+        JAX PRNGKey for stochastic noise in the noisy sphere component.
     x_opt : jax.Array
         Matrix of component optima of shape (10, ndim).
     f_opt : jax.Array
@@ -1238,6 +1248,7 @@ def f24(
         Function value(s).
     """
     fns = _composition4_fns()
+    fns[-1] = lambda z: _sphere_noisy_base(z, key)
     sigma = jnp.full(10, 2.0)
     lambda_ = jnp.array(
         [
@@ -1259,6 +1270,7 @@ def f24(
 
 def f25(
     x: jax.Array,
+    key: jax.Array,
     x_opt: jax.Array,
     f_opt: jax.Array,
     R: jax.Array,
@@ -1277,6 +1289,8 @@ def f25(
     ----------
     x : jax.Array
         Input array of shape (..., ndim).
+    key : jax.Array
+        JAX PRNGKey for stochastic noise (forwarded to F24).
     x_opt : jax.Array
         Matrix of component optima of shape (10, ndim).
     f_opt : jax.Array
@@ -1291,4 +1305,4 @@ def f25(
     jax.Array
         Function value(s).
     """
-    return f24(x, x_opt, f_opt, R, Q)
+    return f24(x, key, x_opt, f_opt, R, Q)
