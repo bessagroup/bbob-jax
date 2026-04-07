@@ -1178,6 +1178,10 @@ def f23(
     Same as F21 but with soft rounding applied to x before
     evaluation. Uses ``softjax`` for ``jax.grad`` compatibility.
 
+    Note: The soft rounding approximation shifts the effective minimum
+    away from the theoretical optimum. At ``x_opt``, the function value
+    differs from ``f_opt`` by ~1e-2 across all tested dimensions.
+
     ![F23 3D surface](img/3d/f23.png){ width=30% }
     ![F23 2D surface](img/2d/f23.png){ width=30% }
 

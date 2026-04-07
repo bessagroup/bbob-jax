@@ -50,6 +50,26 @@ The BBOB and CEC 2005 benchmark suites are cornerstones of black-box optimizatio
 - Delft University of Technology (Bessa Research Group)
 
 
+## Gradient-friendly implementations
+
+Many BBOB functions use non-smooth operations (`abs`, `sign`, `sqrt`, `max`, `min`) that produce zero, undefined, or infinite gradients at certain points. This library uses [softjax](https://github.com/mvanderSchelling/softjax) straight-through estimators to provide well-defined gradients everywhere while keeping the forward pass *exactly* equal to the original function definitions.
+
+For example, `jnp.abs(x)` has a zero gradient at `x = 0` and `jnp.sqrt(x)` has an infinite gradient at `x = 0`. The softjax replacements (`sj.abs_st`, `sj.sqrt`) return the exact same values but route gradients through smooth approximations during the backward pass. This means `jax.grad` produces useful, finite gradients without any loss of benchmark fidelity.
+
+The following operations are replaced:
+
+| Original | Replacement | Affected functions |
+|---|---|---|
+| `jnp.abs` | `sj.abs_st` | F2–F4, F10–F12, F14–F18, F21, F22 (via `tosz_func`, `tasy_func`) |
+| `jnp.sign` | `sj.sign_st` | F2–F4, F10, F11, F15, F16, F21, F22 (via `tosz_func`) |
+| `jnp.sqrt` | `sj.sqrt` | F3, F12, F13, F15, F17, F18, F20 |
+| `jnp.maximum(., 0)` | `sj.relu_st` | F4, F7, F16–F18, F20–F24 (via `penalty`) |
+| `jnp.where` / `>` | `sj.where` / `sj.greater_st` | F3, F6, F12, F15, F17, F18 |
+| `jnp.max` | `sj.max_st` | F21, F22 |
+| `jnp.minimum` | `sj.min_st` | F24 |
+
+Functions that are *intentionally* non-smooth (F7 `step_ellipsoid`, F23 `katsuura`) are left unchanged — smoothing them would defeat their benchmarking purpose.
+
 ## Getting started
 
 To install the package, use pip:

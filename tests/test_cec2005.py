@@ -263,3 +263,71 @@ def test_structure_modified_metadata():
     assert cec2005_function_characteristics["f23"]["structure_modified"]
     assert cec2005_function_characteristics["f24"]["structure_modified"]
     assert cec2005_function_characteristics["f25"]["structure_modified"]
+
+
+_STRUCTURE_MODIFIED = {
+    name
+    for name, chars in cec2005_function_characteristics.items()
+    if chars.get("structure_modified", False)
+}
+
+
+@pytest.mark.parametrize("name,fn", pytest_cec2005)
+@pytest.mark.parametrize("dim", dimensions)
+def test_global_minimum_at_xopt(name, fn, dim):
+    """Verify that fn(x_opt) == f_opt for all CEC 2005 functions.
+
+    Uses the randomized registry only. The deterministic registry places all
+    composition component optima at zero, making the weighting degenerate
+    (uniform weights → result ≈ weighted average of biases, not f_opt).
+    """
+    key = jr.key(0)
+    fn_func, f_opt = fn(ndim=dim, key=key)
+    x_opt = fn_func.keywords["x_opt"]
+
+    if name in COMPOSITION_NAMES:
+        x_opt = x_opt[0]
+
+    if name in _NOISY:
+        result = fn_func(x_opt, jr.key(42))
+    else:
+        result = fn_func(x_opt)
+
+    if name in _STRUCTURE_MODIFIED:
+        # Soft rounding shifts the effective minimum slightly
+        atol = 5e-2
+    elif name in COMPOSITION_NAMES:
+        atol = 1e-2
+    else:
+        atol = 1e-8
+
+    assert jnp.isclose(result, f_opt, atol=atol), (
+        f"{name} dim={dim}: fn(x_opt)={result}, f_opt={f_opt}, "
+        f"diff={result - f_opt}"
+    )
+
+
+@pytest.mark.parametrize("name,fn", pytest_cec2005_original)
+@pytest.mark.parametrize("dim", dimensions)
+def test_global_minimum_at_xopt_deterministic(name, fn, dim):
+    """Verify fn(x_opt) == f_opt for single-component CEC 2005 functions.
+
+    Composition functions (F15-F25) are skipped because the deterministic
+    registry places all component optima at zero, making the composition
+    weighting degenerate.
+    """
+    if name in COMPOSITION_NAMES:
+        pytest.skip("Deterministic registry not meaningful for compositions")
+
+    fn_func, f_opt = fn(ndim=dim, key=jr.key(0))
+    x_opt = fn_func.keywords["x_opt"]
+
+    if name in _NOISY:
+        result = fn_func(x_opt, jr.key(42))
+    else:
+        result = fn_func(x_opt)
+
+    assert jnp.isclose(result, f_opt, atol=1e-8), (
+        f"{name} dim={dim}: fn(x_opt)={result}, f_opt={f_opt}, "
+        f"diff={result - f_opt}"
+    )

@@ -7,6 +7,7 @@ from typing import cast
 import jax
 import jax.numpy as jnp
 import jax.random as jr
+import softjax as sj
 
 # Local
 from bbob_jax._src.utils import (
@@ -286,8 +287,8 @@ def attractive_sector(
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=10.0)
     z = Q @ lamb @ R @ (x - x_opt)
-    cond = (z * x_opt) > 0.0
-    s = jnp.where(cond, 100.0, 1.0)
+    cond = sj.greater_st(z * x_opt, 0.0)
+    s = sj.where(cond, jnp.array(100.0), jnp.array(1.0))
 
     term = jnp.sum((s * z) ** 2)
 
@@ -419,6 +420,13 @@ def rosenbrock_rotated(
         img/3d/rosenbrock_rotated.png){ width=30% }
     ![Rosenbrock rotated function 2D surface](
         img/2d/rosenbrock_rotated.png){ width=30% }
+
+    Note
+    ----
+    The true minimizer is not at ``x_opt`` but at
+    ``x_opt + (0.5 / zmax) * ones @ R.T`` where
+    ``zmax = max(1, sqrt(ndim) / 8)``. For some rotation matrices this
+    point can fall outside the standard ``[-5, 5]`` bounds.
 
     Parameters
     ----------
@@ -609,7 +617,10 @@ def sharp_ridge(
     ndim = x.shape[-1]
     lamb = lambda_func(ndim, alpha=10.0)
     z = Q @ lamb @ R @ (x - x_opt)
-    return z[0] ** 2 + 100.0 * jnp.sqrt(jnp.sum(z[1:] ** 2)) + f_opt
+    result: jax.Array = (
+        z[0] ** 2 + 100.0 * sj.sqrt(jnp.sum(z[1:] ** 2)) + f_opt
+    )
+    return result
 
 
 def sum_of_different_powers(
@@ -649,7 +660,7 @@ def sum_of_different_powers(
     ndim = x.shape[-1]
     z = R @ (x - x_opt)
     idx = jnp.arange(1, ndim + 1, dtype=x.dtype)
-    return jnp.sum(jnp.abs(z) ** (2 + 4 * (idx - 1) / (ndim - 1))) + f_opt
+    return jnp.sum(sj.abs_st(z) ** (2 + 4 * (idx - 1) / (ndim - 1))) + f_opt
 
 
 def rastrigin(
@@ -787,11 +798,11 @@ def schaffer_f7_condition_10(
     lamb = lambda_func(ndim, alpha=10.0)
     z = lamb @ Q @ tasy_func(R @ (x - x_opt), beta=0.5)
 
-    s = jnp.sqrt(z[:-1] ** 2 + z[1:] ** 2)
+    s = sj.sqrt(z[:-1] ** 2 + z[1:] ** 2)
 
     term1 = (1 / (ndim - 1)) * jnp.sum(
-        jnp.sqrt(s)
-        + jnp.sqrt(s) * jnp.power(jnp.sin(50.0 * jnp.power(s, 0.2)), 2)
+        sj.sqrt(s)
+        + sj.sqrt(s) * jnp.power(jnp.sin(50.0 * jnp.power(s, 0.2)), 2)
     )
 
     result = jnp.power(term1, 2) + 10 * penalty(x)
@@ -836,11 +847,11 @@ def schaffer_f7_condition_1000(
     lamb = lambda_func(ndim, alpha=1000.0)
     z = lamb @ Q @ tasy_func(R @ (x - x_opt), beta=0.5)
 
-    s = jnp.sqrt(z[:-1] ** 2 + z[1:] ** 2)
+    s = sj.sqrt(z[:-1] ** 2 + z[1:] ** 2)
 
     term1 = (1 / (ndim - 1)) * jnp.sum(
-        jnp.sqrt(s)
-        + jnp.sqrt(s) * jnp.power(jnp.sin(50.0 * jnp.power(s, 0.2)), 2)
+        sj.sqrt(s)
+        + sj.sqrt(s) * jnp.power(jnp.sin(50.0 * jnp.power(s, 0.2)), 2)
     )
 
     result = jnp.power(term1, 2) + 10 * penalty(x)
@@ -863,6 +874,13 @@ def griewank_rosenbrock_f8f2(
         img/3d/griewank_rosenbrock_f8f2.png){ width=30% }
     ![Griewank rosenbrock f8f2 function 2D surface](
         img/2d/griewank_rosenbrock_f8f2.png){ width=30% }
+
+    Note
+    ----
+    The true minimizer is not at ``x_opt`` but at
+    ``x_opt + (0.5 / zmax) * R.T @ ones`` where
+    ``zmax = max(1, sqrt(ndim) / 8)``. For some rotation matrices this
+    point can fall outside the standard ``[-5, 5]`` bounds.
 
     Parameters
     ----------
@@ -906,6 +924,13 @@ def schwefel_xsinx(
     ![Schwefel xsinx function 2D surface](
         img/2d/schwefel_xsinx.png){ width=30% }
 
+    Note
+    ----
+    The zero-offset constant (≈4.1898) is computed dynamically from the
+    internal ``x_opt_shape`` rather than hardcoded as a float64 literal.
+    This ensures exact cancellation at the optimum in float32, avoiding a
+    ~5e-7 residual from float64-to-float32 casting mismatch.
+
     Parameters
     ----------
     x : jax.Array
@@ -948,13 +973,15 @@ def schwefel_xsinx(
     f = (
         -1.0
         / (100.0 * ndim)
-        * jnp.sum(z * jnp.sin(jnp.sqrt(jnp.abs(z))), axis=-1)
+        * jnp.sum(z * jnp.sin(sj.sqrt(jnp.abs(z))), axis=-1)
     )
 
     # Penalization
     pen = 100.0 * penalty(z / 100.0)
 
-    return f + 4.189828872724339 + pen + f_opt
+    z_ref = 200.0 * jnp.abs(x_opt_shape)
+    f_ref = 1.0 / (100.0 * ndim) * jnp.sum(z_ref * jnp.sin(jnp.sqrt(z_ref)))
+    return f + f_ref + pen + f_opt
 
 
 def gallagher_101_peaks(
@@ -1020,7 +1047,7 @@ def gallagher_101_peaks(
 
     inside_max = jax.vmap(apply_C)(C, diff, w)
 
-    f = 10.0 - jnp.max(inside_max, axis=0)
+    f = 10.0 - sj.max_st(inside_max, axis=0)
 
     f_tosz = tosz_func(jnp.array([f]))[0]
 
@@ -1092,7 +1119,7 @@ def gallagher_21_peaks(
 
     inside_max = jax.vmap(apply_C)(C, diff, w)
 
-    f = 10.0 - jnp.max(inside_max, axis=0)
+    f = 10.0 - sj.max_st(inside_max, axis=0)
 
     f_tosz = tosz_func(jnp.array([f]))[0]
 
@@ -1212,11 +1239,16 @@ def lunacek_bi_rastrigin(
 
     mu1 = -jnp.sqrt((mu0**2 - d) / s)
 
-    term1 = jnp.minimum(
-        jnp.sum(jnp.power(x_hat - mu0, 2)),
-        d * ndim + s * jnp.sum(jnp.power(x_hat - mu1, 2)),
+    term1 = sj.min_st(
+        jnp.stack(
+            [
+                jnp.sum(jnp.power(x_hat - mu0, 2)),
+                d * ndim + s * jnp.sum(jnp.power(x_hat - mu1, 2)),
+            ]
+        ),
     )
 
     term2 = 10.0 * (ndim - jnp.sum(jnp.cos(2.0 * jnp.pi * z)))
 
-    return term1 + term2 + 1e4 * penalty(x) + f_opt
+    result: jax.Array = term1 + term2 + 1e4 * penalty(x) + f_opt
+    return result

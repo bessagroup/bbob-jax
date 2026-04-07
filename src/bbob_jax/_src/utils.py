@@ -4,6 +4,7 @@ from typing import cast
 import jax
 import jax.numpy as jnp
 import jax.random as jr
+import softjax as sj
 from jaxtyping import PRNGKeyArray
 
 
@@ -35,8 +36,8 @@ def tosz_func(x: jax.Array) -> jax.Array:
     eps = 1e-12  # avoid log(0)
 
     x = jnp.asarray(x)
-    abs_x = jnp.maximum(jnp.abs(x), eps)
-    x_sign = jnp.sign(x)
+    abs_x = jnp.maximum(sj.abs_st(x), eps)
+    x_sign = sj.sign_st(x)
     x_star = jnp.log(abs_x)
     transformed = x_sign * jnp.exp(
         x_star + 0.049 * (jnp.sin(c1 * x_star) + jnp.sin(c2 * x_star))
@@ -44,15 +45,16 @@ def tosz_func(x: jax.Array) -> jax.Array:
 
     # same “special treatment” as original, but now applied elementwise
     mask = (x == x[0]) | (x == x[-1])
-    return jnp.where(mask, transformed, x)
+    result: jax.Array = jnp.where(mask, transformed, x)
+    return result
 
 
 def tasy_func(x: jax.Array, beta: float = 0.5) -> jax.Array:
     ndim = x.shape[-1]
     idx = jnp.arange(0, ndim)
-    up = 1 + beta * ((idx - 1) / (ndim - 1)) * jnp.sqrt(jnp.abs(x))
-    x_temp = jnp.abs(x) ** up
-    return cast(jax.Array, jnp.where(x > 0, x_temp, x))
+    up = 1 + beta * ((idx - 1) / (ndim - 1)) * sj.sqrt(jnp.abs(x))
+    x_temp = sj.abs_st(x) ** up
+    return cast(jax.Array, sj.where(sj.greater_st(x, 0), x_temp, x))
 
 
 def lambda_func(size: int, alpha: float | jax.Array = 10.0) -> jax.Array:
@@ -83,7 +85,7 @@ def rotation_matrix(dim: int, key: jax.Array) -> jax.Array:
 
 
 def penalty(x: jax.Array) -> jax.Array:
-    return jnp.sum(jnp.power(jnp.maximum(jnp.abs(x) - 5.0, 0.0), 2), axis=-1)
+    return jnp.sum(jnp.power(sj.relu_st(jnp.abs(x) - 5.0), 2), axis=-1)
 
 
 def bernoulli_vector(dim: int, key: jax.Array) -> jax.Array:
@@ -130,12 +132,12 @@ def ackley(x: jax.Array) -> jax.Array:
     ndim = x.shape[-1]
     sum_sq = jnp.sum(jnp.square(x))
     sum_cos = jnp.sum(jnp.cos(2.0 * jnp.pi * x))
-    # Small epsilon avoids NaN gradient at x=0 (sqrt'(0) = inf)
-    return (
-        -20.0 * jnp.exp(-0.2 * jnp.sqrt(sum_sq / ndim + 1e-10))
-        - jnp.exp(sum_cos / ndim)
-        + 20.0
-        + jnp.e
+    # Reformulated to pair cancelling terms and avoid catastrophic
+    # cancellation at z=0.  Original: -20*exp(A) - exp(B) + 20 + e
+    # Rewrite:  -20*(exp(A) - 1) - (exp(B) - exp(1))
+    # Small epsilon in sqrt avoids NaN gradient at x=0 (sqrt'(0) = inf)
+    return -20.0 * (jnp.exp(-0.2 * jnp.sqrt(sum_sq / ndim + 1e-20)) - 1.0) - (
+        jnp.exp(sum_cos / ndim) - jnp.exp(1.0)
     )
 
 
@@ -165,7 +167,6 @@ def cec2005_weierstrass(x: jax.Array) -> jax.Array:
     Accepts 1D input (ndim,).
     """
     a, b = 0.5, 3.0
-    ndim = x.shape[-1]
     k = jnp.arange(0, 21, dtype=jnp.float32)
     ak = a**k  # (21,)
     bk = b**k  # (21,)
@@ -173,10 +174,9 @@ def cec2005_weierstrass(x: jax.Array) -> jax.Array:
     cos_terms = ak * jnp.cos(
         2.0 * jnp.pi * bk * (x[..., None] + 0.5)
     )  # (ndim, 21)
-    outer_sum = jnp.sum(cos_terms)
-    # Constant subtraction: n * sum_k(ak * cos(2*pi*bk*0.5))
-    constant = ndim * jnp.sum(ak * jnp.cos(jnp.pi * bk))
-    return outer_sum - constant
+    # Per-element difference avoids catastrophic cancellation at z=0
+    cos_ref = ak * jnp.cos(jnp.pi * bk)  # (21,)
+    return jnp.sum(cos_terms - cos_ref[None, :])
 
 
 def hybrid_composition(
