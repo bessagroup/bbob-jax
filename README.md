@@ -64,6 +64,14 @@ If you use `bbob-jax` in your research or in a scientific publication, it is app
 }
 ```
 
+## Gradient-friendly implementations
+
+Many BBOB functions use non-smooth operations (`abs`, `sign`, `sqrt`, `max`, `min`) that produce zero, undefined, or infinite gradients at certain points. This library uses [softjax](https://github.com/mvanderSchelling/softjax) straight-through estimators to provide well-defined gradients everywhere while keeping the forward pass *exactly* equal to the original function definitions.
+
+For example, `jnp.abs(x)` has a zero gradient at `x = 0` and `jnp.sqrt(x)` has an infinite gradient at `x = 0`. The softjax replacements (`sj.abs_st`, `sj.sqrt`) return the exact same values but route gradients through smooth approximations during the backward pass. This means `jax.grad` produces useful, finite gradients without any loss of benchmark fidelity.
+
+Functions that are *intentionally* non-smooth (F7 `step_ellipsoid`, F23 `katsuura`) are left unchanged — smoothing them would defeat their benchmarking purpose.
+
 ## Getting started
 
 To install the package, use pip:
