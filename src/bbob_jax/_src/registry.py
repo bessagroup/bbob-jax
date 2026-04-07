@@ -1,3 +1,11 @@
+"""Registry factories for BBOB and CEC 2005 benchmark functions.
+
+Provides ``registry`` and ``registry_original`` dicts that map
+function names to factories. Each factory partially applies
+random or deterministic parameters (x_opt, f_opt, R, Q) to
+produce a callable benchmark function.
+"""
+
 #                                                                       Modules
 # =============================================================================
 
@@ -14,6 +22,7 @@ from jax.tree_util import Partial
 from jaxtyping import PRNGKeyArray
 
 from bbob_jax._src.bbob import (
+    _precompute_gallagher,
     attractive_sector,
     bent_cigar,
     discuss,
@@ -40,6 +49,9 @@ from bbob_jax._src.bbob import (
     weierstrass,
 )
 from bbob_jax._src.cec2005 import (
+    _composition1_fns,
+    _composition2_fns,
+    _composition3_fns,
     f1,
     f2,
     f3,
@@ -66,7 +78,14 @@ from bbob_jax._src.cec2005 import (
     f24,
     f25,
 )
-from bbob_jax._src.utils import fopt, rotation_matrix, xopt
+from bbob_jax._src.utils import (
+    bernoulli_vector,
+    compute_composition_f_max,
+    fopt,
+    lambda_func,
+    rotation_matrix,
+    xopt,
+)
 
 #                                                          Authorship & Credits
 # =============================================================================
@@ -81,13 +100,29 @@ BBOBFn = tuple[Callable[[jax.Array], jax.Array], jax.Array]
 def _partial_keywords(
     fn_partial: Callable[[jax.Array], jax.Array],
 ) -> dict[str, Any]:
+    """Extract keyword arguments from a Partial."""
     return cast(dict[str, Any], cast(Any, fn_partial).keywords)
 
 
 def _conditioned_linear_transform(
     dim: int, key: PRNGKeyArray, condition_number: float
 ) -> jax.Array:
-    """Generate a seeded CEC-style linear transform with a target condition."""
+    """Generate a seeded CEC-style linear transform.
+
+    Parameters
+    ----------
+    dim : int
+        Matrix dimension.
+    key : PRNGKeyArray
+        JAX random key.
+    condition_number : float
+        Target condition number.
+
+    Returns
+    -------
+    jax.Array
+        Transform matrix of shape ``(dim, dim)``.
+    """
     key_p, key_q, key_u = jr.split(key, 3)
     p = rotation_matrix(dim, key_p)
     q = rotation_matrix(dim, key_q)
@@ -101,6 +136,7 @@ def _conditioned_linear_transform(
 def _conditioned_transform_stack(
     dim: int, keys: PRNGKeyArray, condition_numbers: jax.Array
 ) -> jax.Array:
+    """Stack conditioned linear transforms for each component."""
     return jnp.stack(
         [
             _conditioned_linear_transform(
@@ -114,7 +150,25 @@ def _conditioned_transform_stack(
 def _sample_nonsingular_integer_matrix(
     key: PRNGKeyArray, ndim: int, minval: int, maxval: int
 ) -> jax.Array:
-    """Sample an integer matrix and retry a few times if it is singular."""
+    """Sample an integer matrix, retrying if singular.
+
+    Parameters
+    ----------
+    key : PRNGKeyArray
+        JAX random key.
+    ndim : int
+        Matrix dimension.
+    minval : int
+        Minimum integer value (inclusive).
+    maxval : int
+        Maximum integer value (inclusive).
+
+    Returns
+    -------
+    jax.Array
+        Non-singular integer matrix of shape
+        ``(ndim, ndim)``.
+    """
     attempt_keys = jr.split(key, 32)
     fallback = jr.randint(
         attempt_keys[0], (ndim, ndim), minval, maxval + 1
@@ -131,6 +185,22 @@ def _sample_nonsingular_integer_matrix(
 def make_determinstic(
     fn: Callable, ndim: int, key: PRNGKeyArray | None = None
 ) -> BBOBFn:
+    """Deterministic BBOB factory with zero shift and identity rotations.
+
+    Parameters
+    ----------
+    fn : Callable
+        Base BBOB function.
+    ndim : int
+        Number of input dimensions.
+    key : PRNGKeyArray or None, optional
+        Ignored; accepted for signature compatibility.
+
+    Returns
+    -------
+    BBOBFn
+        Tuple of (partial function, optimal value).
+    """
     x_opt = jnp.zeros(ndim)
     eye = jnp.eye(ndim)
     f_opt = jnp.array(0.0)
@@ -138,6 +208,22 @@ def make_determinstic(
 
 
 def make_randomized(fn: Callable, ndim: int, key: PRNGKeyArray) -> BBOBFn:
+    """Randomized BBOB factory with random shift and rotations.
+
+    Parameters
+    ----------
+    fn : Callable
+        Base BBOB function.
+    ndim : int
+        Number of input dimensions.
+    key : PRNGKeyArray
+        JAX random key for parameter generation.
+
+    Returns
+    -------
+    BBOBFn
+        Tuple of (partial function, optimal value).
+    """
     key1, key2 = jr.split(key)
     x_opt = xopt(key=key1, ndim=ndim, minval=-4.0, maxval=4.0)
     R = rotation_matrix(ndim, key1)
@@ -146,82 +232,410 @@ def make_randomized(fn: Callable, ndim: int, key: PRNGKeyArray) -> BBOBFn:
     return Partial(fn, x_opt=x_opt, f_opt=f_opt, R=R, Q=Q), f_opt
 
 
+def _make_with_mat(
+    fn: Callable,
+    ndim: int,
+    key: PRNGKeyArray,
+    alpha: float = 10.0,
+    order: str = "QLR",
+) -> BBOBFn:
+    """Factory that precomputes a matrix chain.
+
+    Combines ``lambda_func`` conditioning with rotation
+    matrices in the specified ``order``.
+    """
+    partial_fn, f_opt_val = make_randomized(fn, ndim, key)
+    kw = _partial_keywords(partial_fn)
+    lamb = lambda_func(ndim, alpha)
+    if order == "QLR":
+        mat = kw["Q"] @ lamb @ kw["R"]
+    elif order == "RLQ":
+        mat = kw["R"] @ lamb @ kw["Q"]
+    elif order == "LQ":
+        mat = lamb @ kw["Q"]
+    elif order == "LR":
+        mat = lamb @ kw["R"]
+    else:
+        raise ValueError(f"Unknown order: {order}")
+    return Partial(fn, **kw, _mat=mat), f_opt_val
+
+
+def _make_with_mat_deterministic(
+    fn: Callable,
+    ndim: int,
+    key: PRNGKeyArray | None = None,
+    alpha: float = 10.0,
+    order: str = "QLR",
+) -> BBOBFn:
+    """Deterministic factory that precomputes a matrix chain.
+
+    Combines ``lambda_func`` conditioning with identity
+    rotations in the specified ``order``.
+    """
+    partial_fn, f_opt_val = make_determinstic(fn, ndim)
+    kw = _partial_keywords(partial_fn)
+    lamb = lambda_func(ndim, alpha)
+    if order == "QLR":
+        mat = kw["Q"] @ lamb @ kw["R"]
+    elif order == "RLQ":
+        mat = kw["R"] @ lamb @ kw["Q"]
+    elif order == "LQ":
+        mat = lamb @ kw["Q"]
+    elif order == "LR":
+        mat = lamb @ kw["R"]
+    else:
+        raise ValueError(f"Unknown order: {order}")
+    return Partial(fn, **kw, _mat=mat), f_opt_val
+
+
+def _make_linear_slope(fn: Callable, ndim: int, key: PRNGKeyArray) -> BBOBFn:
+    """Factory for linear_slope with precomputed random state."""
+    partial_fn, f_opt_val = make_randomized(fn, ndim, key)
+    kw = _partial_keywords(partial_fn)
+    rng = jr.key(0)
+    rng = jr.fold_in(rng, kw["Q"][0, 0])
+    ls_x_opt = 5 * bernoulli_vector(ndim, rng)
+    i = jnp.arange(1, ndim + 1, dtype=jnp.float32)
+    ls_s = jnp.sign(ls_x_opt) * jnp.power(10.0, (i - 1) / (ndim - 1))
+    return Partial(fn, **kw, _ls_x_opt=ls_x_opt, _ls_s=ls_s), f_opt_val
+
+
+def _make_linear_slope_deterministic(
+    fn: Callable, ndim: int, key: PRNGKeyArray | None = None
+) -> BBOBFn:
+    """Deterministic factory for linear_slope."""
+    partial_fn, f_opt_val = make_determinstic(fn, ndim)
+    kw = _partial_keywords(partial_fn)
+    rng = jr.key(0)
+    rng = jr.fold_in(rng, kw["Q"][0, 0])
+    ls_x_opt = 5 * bernoulli_vector(ndim, rng)
+    i = jnp.arange(1, ndim + 1, dtype=jnp.float32)
+    ls_s = jnp.sign(ls_x_opt) * jnp.power(10.0, (i - 1) / (ndim - 1))
+    return Partial(fn, **kw, _ls_x_opt=ls_x_opt, _ls_s=ls_s), f_opt_val
+
+
+def _make_schwefel(fn: Callable, ndim: int, key: PRNGKeyArray) -> BBOBFn:
+    """Factory for schwefel_xsinx with precomputed random state + lambda."""
+    partial_fn, f_opt_val = make_randomized(fn, ndim, key)
+    kw = _partial_keywords(partial_fn)
+    rng = jr.key(0)
+    rng = jr.fold_in(rng, kw["Q"][0, 0])
+    ones = bernoulli_vector(ndim, rng)
+    x_opt_shape = 4.2096874633 / 2 * ones
+    lamb = lambda_func(ndim, alpha=10.0)
+    z_ref = 200.0 * jnp.abs(x_opt_shape)
+    f_ref = 1.0 / (100.0 * ndim) * jnp.sum(z_ref * jnp.sin(jnp.sqrt(z_ref)))
+    return Partial(
+        fn,
+        **kw,
+        _sw_ones=ones,
+        _sw_x_opt_shape=x_opt_shape,
+        _sw_lamb=lamb,
+        _sw_f_ref=f_ref,
+    ), f_opt_val
+
+
+def _make_schwefel_deterministic(
+    fn: Callable, ndim: int, key: PRNGKeyArray | None = None
+) -> BBOBFn:
+    """Deterministic factory for schwefel_xsinx."""
+    partial_fn, f_opt_val = make_determinstic(fn, ndim)
+    kw = _partial_keywords(partial_fn)
+    rng = jr.key(0)
+    rng = jr.fold_in(rng, kw["Q"][0, 0])
+    ones = bernoulli_vector(ndim, rng)
+    x_opt_shape = 4.2096874633 / 2 * ones
+    lamb = lambda_func(ndim, alpha=10.0)
+    z_ref = 200.0 * jnp.abs(x_opt_shape)
+    f_ref = 1.0 / (100.0 * ndim) * jnp.sum(z_ref * jnp.sin(jnp.sqrt(z_ref)))
+    return Partial(
+        fn,
+        **kw,
+        _sw_ones=ones,
+        _sw_x_opt_shape=x_opt_shape,
+        _sw_lamb=lamb,
+        _sw_f_ref=f_ref,
+    ), f_opt_val
+
+
+def _make_lunacek_randomized(
+    fn: Callable, ndim: int, key: PRNGKeyArray
+) -> BBOBFn:
+    """Factory for lunacek_bi_rastrigin with precomputed state."""
+    partial_fn, f_opt_val = make_randomized(fn, ndim, key)
+    kw = _partial_keywords(partial_fn)
+    mat = kw["Q"] @ lambda_func(ndim, alpha=100.0) @ kw["R"]
+    # Precompute random-state-dependent values
+    rng = jr.key(0)
+    rng = jr.fold_in(rng, kw["Q"][0, 0])
+    mu0 = 2.5
+    d = 1.0
+    x_opt_shape = (mu0 / 2.0) * bernoulli_vector(ndim, rng)
+    s = 1.0 - 1.0 / (2.0 * jnp.sqrt(ndim + 20.0) - 8.2)
+    mu1 = -jnp.sqrt((mu0**2 - d) / s)
+    return Partial(
+        fn,
+        **kw,
+        _mat=mat,
+        _x_opt_shape=x_opt_shape,
+        _s=s,
+        _mu1=mu1,
+    ), f_opt_val
+
+
+def _make_lunacek_deterministic(
+    fn: Callable, ndim: int, key: PRNGKeyArray | None = None
+) -> BBOBFn:
+    """Deterministic factory for lunacek_bi_rastrigin."""
+    partial_fn, f_opt_val = make_determinstic(fn, ndim)
+    kw = _partial_keywords(partial_fn)
+    mat = kw["Q"] @ lambda_func(ndim, alpha=100.0) @ kw["R"]
+    rng = jr.key(0)
+    rng = jr.fold_in(rng, kw["Q"][0, 0])
+    mu0 = 2.5
+    d = 1.0
+    x_opt_shape = (mu0 / 2.0) * bernoulli_vector(ndim, rng)
+    s = 1.0 - 1.0 / (2.0 * jnp.sqrt(ndim + 20.0) - 8.2)
+    mu1 = -jnp.sqrt((mu0**2 - d) / s)
+    return Partial(
+        fn,
+        **kw,
+        _mat=mat,
+        _x_opt_shape=x_opt_shape,
+        _s=s,
+        _mu1=mu1,
+    ), f_opt_val
+
+
+def _make_gallagher_randomized(
+    fn: Callable,
+    ndim: int,
+    key: PRNGKeyArray,
+    num_peaks: int,
+    w_divisor: int,
+    alpha_first: float,
+    y_minval: float,
+    y_maxval: float,
+) -> BBOBFn:
+    """Randomized factory for Gallagher peak functions."""
+    partial_fn, f_opt_val = make_randomized(fn, ndim, key)
+    kw = _partial_keywords(partial_fn)
+    w, y, c_diags = _precompute_gallagher(
+        kw["x_opt"],
+        kw["Q"],
+        ndim,
+        num_peaks,
+        w_divisor,
+        alpha_first,
+        y_minval,
+        y_maxval,
+    )
+    return Partial(
+        fn,
+        x_opt=kw["x_opt"],
+        f_opt=kw["f_opt"],
+        R=kw["R"],
+        Q=kw["Q"],
+        _gal_w=w,
+        _gal_y=y,
+        _gal_c_diags=c_diags,
+    ), f_opt_val
+
+
+def _make_gallagher_deterministic(
+    fn: Callable,
+    ndim: int,
+    key: PRNGKeyArray | None = None,
+    num_peaks: int = 101,
+    w_divisor: int = 99,
+    alpha_first: float = 1000.0,
+    y_minval: float = -5.0,
+    y_maxval: float = 5.0,
+) -> BBOBFn:
+    """Deterministic factory for Gallagher peak functions."""
+    partial_fn, f_opt_val = make_determinstic(fn, ndim)
+    kw = _partial_keywords(partial_fn)
+    w, y, c_diags = _precompute_gallagher(
+        kw["x_opt"],
+        kw["Q"],
+        ndim,
+        num_peaks,
+        w_divisor,
+        alpha_first,
+        y_minval,
+        y_maxval,
+    )
+    return Partial(
+        fn,
+        x_opt=kw["x_opt"],
+        f_opt=kw["f_opt"],
+        R=kw["R"],
+        Q=kw["Q"],
+        _gal_w=w,
+        _gal_y=y,
+        _gal_c_diags=c_diags,
+    ), f_opt_val
+
+
 # =============================================================================
 
 registry: dict[str, Callable[[int, PRNGKeyArray], BBOBFn]] = {
-    "attractive_sector": Partial(make_randomized, fn=attractive_sector),
+    "attractive_sector": Partial(
+        _make_with_mat, fn=attractive_sector, alpha=10.0, order="QLR"
+    ),
     "bent_cigar": Partial(make_randomized, fn=bent_cigar),
     "discuss": Partial(make_randomized, fn=discuss),
     "ellipsoid": Partial(make_randomized, fn=ellipsoid),
     "ellipsoid_seperable": Partial(make_randomized, fn=ellipsoid_seperable),
-    "gallagher_21_peaks": Partial(make_randomized, fn=gallagher_21_peaks),
-    "gallagher_101_peaks": Partial(make_randomized, fn=gallagher_101_peaks),
+    "gallagher_21_peaks": Partial(
+        _make_gallagher_randomized,
+        fn=gallagher_21_peaks,
+        num_peaks=21,
+        w_divisor=19,
+        alpha_first=1000.0**2,
+        y_minval=-4.9,
+        y_maxval=4.9,
+    ),
+    "gallagher_101_peaks": Partial(
+        _make_gallagher_randomized,
+        fn=gallagher_101_peaks,
+        num_peaks=101,
+        w_divisor=99,
+        alpha_first=1000.0,
+        y_minval=-5.0,
+        y_maxval=5.0,
+    ),
     "griewank_rosenbrock_f8f2": Partial(
         make_randomized, fn=griewank_rosenbrock_f8f2
     ),
-    "katsuura": Partial(make_randomized, fn=katsuura),
-    "linear_slope": Partial(make_randomized, fn=linear_slope),
-    "lunacek_bi_rastrigin": Partial(make_randomized, fn=lunacek_bi_rastrigin),
-    "rastrigin": Partial(make_randomized, fn=rastrigin),
+    "katsuura": Partial(_make_with_mat, fn=katsuura, alpha=100.0, order="QLR"),
+    "linear_slope": Partial(_make_linear_slope, fn=linear_slope),
+    "lunacek_bi_rastrigin": Partial(
+        _make_lunacek_randomized, fn=lunacek_bi_rastrigin
+    ),
+    "rastrigin": Partial(
+        _make_with_mat, fn=rastrigin, alpha=10.0, order="RLQ"
+    ),
     "rastrigin_seperable": Partial(make_randomized, fn=rastrigin_seperable),
     "rosenbrock": Partial(make_randomized, fn=rosenbrock),
     "rosenbrock_rotated": Partial(make_randomized, fn=rosenbrock_rotated),
     "schaffer_f7_condition_10": Partial(
-        make_randomized, fn=schaffer_f7_condition_10
+        _make_with_mat, fn=schaffer_f7_condition_10, alpha=10.0, order="LQ"
     ),
     "schaffer_f7_condition_1000": Partial(
-        make_randomized, fn=schaffer_f7_condition_1000
+        _make_with_mat,
+        fn=schaffer_f7_condition_1000,
+        alpha=1000.0,
+        order="LQ",
     ),
-    "schwefel_xsinx": Partial(make_randomized, fn=schwefel_xsinx),
-    "sharp_ridge": Partial(make_randomized, fn=sharp_ridge),
+    "schwefel_xsinx": Partial(_make_schwefel, fn=schwefel_xsinx),
+    "sharp_ridge": Partial(
+        _make_with_mat, fn=sharp_ridge, alpha=10.0, order="QLR"
+    ),
     "skew_rastrigin_bueche": Partial(
         make_randomized, fn=skew_rastrigin_bueche
     ),
     "sphere": Partial(make_randomized, fn=sphere),
-    "step_ellipsoid": Partial(make_randomized, fn=step_ellipsoid),
+    "step_ellipsoid": Partial(
+        _make_with_mat, fn=step_ellipsoid, alpha=10.0, order="LR"
+    ),
     "sum_of_different_powers": Partial(
         make_randomized, fn=sum_of_different_powers
     ),
-    "weierstrass": Partial(make_randomized, fn=weierstrass),
+    "weierstrass": Partial(
+        _make_with_mat, fn=weierstrass, alpha=0.01, order="RLQ"
+    ),
 }
 
 registry_original: dict[str, Callable[[int], BBOBFn]] = {
-    "attractive_sector": Partial(make_determinstic, fn=attractive_sector),
+    "attractive_sector": Partial(
+        _make_with_mat_deterministic,
+        fn=attractive_sector,
+        alpha=10.0,
+        order="QLR",
+    ),
     "bent_cigar": Partial(make_determinstic, fn=bent_cigar),
     "discuss": Partial(make_determinstic, fn=discuss),
     "ellipsoid": Partial(make_determinstic, fn=ellipsoid),
     "ellipsoid_seperable": Partial(make_determinstic, fn=ellipsoid_seperable),
-    "gallagher_21_peaks": Partial(make_determinstic, fn=gallagher_21_peaks),
-    "gallagher_101_peaks": Partial(make_determinstic, fn=gallagher_101_peaks),
+    "gallagher_21_peaks": Partial(
+        _make_gallagher_deterministic,
+        fn=gallagher_21_peaks,
+        num_peaks=21,
+        w_divisor=19,
+        alpha_first=1000.0**2,
+        y_minval=-4.9,
+        y_maxval=4.9,
+    ),
+    "gallagher_101_peaks": Partial(
+        _make_gallagher_deterministic,
+        fn=gallagher_101_peaks,
+        num_peaks=101,
+        w_divisor=99,
+        alpha_first=1000.0,
+        y_minval=-5.0,
+        y_maxval=5.0,
+    ),
     "griewank_rosenbrock_f8f2": Partial(
         make_determinstic, fn=griewank_rosenbrock_f8f2
     ),
-    "katsuura": Partial(make_determinstic, fn=katsuura),
-    "linear_slope": Partial(make_determinstic, fn=linear_slope),
-    "lunacek_bi_rastrigin": Partial(
-        make_determinstic, fn=lunacek_bi_rastrigin
+    "katsuura": Partial(
+        _make_with_mat_deterministic,
+        fn=katsuura,
+        alpha=100.0,
+        order="QLR",
     ),
-    "rastrigin": Partial(make_determinstic, fn=rastrigin),
+    "linear_slope": Partial(_make_linear_slope_deterministic, fn=linear_slope),
+    "lunacek_bi_rastrigin": Partial(
+        _make_lunacek_deterministic, fn=lunacek_bi_rastrigin
+    ),
+    "rastrigin": Partial(
+        _make_with_mat_deterministic,
+        fn=rastrigin,
+        alpha=10.0,
+        order="RLQ",
+    ),
     "rastrigin_seperable": Partial(make_determinstic, fn=rastrigin_seperable),
     "rosenbrock": Partial(make_determinstic, fn=rosenbrock),
     "rosenbrock_rotated": Partial(make_determinstic, fn=rosenbrock_rotated),
     "schaffer_f7_condition_10": Partial(
-        make_determinstic, fn=schaffer_f7_condition_10
+        _make_with_mat_deterministic,
+        fn=schaffer_f7_condition_10,
+        alpha=10.0,
+        order="LQ",
     ),
     "schaffer_f7_condition_1000": Partial(
-        make_determinstic, fn=schaffer_f7_condition_1000
+        _make_with_mat_deterministic,
+        fn=schaffer_f7_condition_1000,
+        alpha=1000.0,
+        order="LQ",
     ),
-    "schwefel_xsinx": Partial(make_determinstic, fn=schwefel_xsinx),
-    "sharp_ridge": Partial(make_determinstic, fn=sharp_ridge),
+    "schwefel_xsinx": Partial(_make_schwefel_deterministic, fn=schwefel_xsinx),
+    "sharp_ridge": Partial(
+        _make_with_mat_deterministic,
+        fn=sharp_ridge,
+        alpha=10.0,
+        order="QLR",
+    ),
     "skew_rastrigin_bueche": Partial(
         make_determinstic, fn=skew_rastrigin_bueche
     ),
     "sphere": Partial(make_determinstic, fn=sphere),
-    "step_ellipsoid": Partial(make_determinstic, fn=step_ellipsoid),
+    "step_ellipsoid": Partial(
+        _make_with_mat_deterministic,
+        fn=step_ellipsoid,
+        alpha=10.0,
+        order="LR",
+    ),
     "sum_of_different_powers": Partial(
         make_determinstic, fn=sum_of_different_powers
     ),
-    "weierstrass": Partial(make_determinstic, fn=weierstrass),
+    "weierstrass": Partial(
+        _make_with_mat_deterministic,
+        fn=weierstrass,
+        alpha=0.01,
+        order="RLQ",
+    ),
 }
 
 
@@ -233,10 +647,31 @@ def make_randomized_cec2005(
     minval: float = -100.0,
     maxval: float = 100.0,
 ) -> BBOBFn:
-    """Factory for CEC 2005 functions with seed-generated parameters.
+    """Factory for CEC 2005 functions with seed-generated params.
 
-    Always splits key into 2*num_components+2 subkeys so x_opt, R, Q,
-    and f_opt consume distinct subkeys (avoids the BBOB key-reuse pattern).
+    Splits key into ``2*num_components+2`` subkeys so x_opt,
+    R, Q, and f_opt consume distinct subkeys (avoids the
+    BBOB key-reuse pattern).
+
+    Parameters
+    ----------
+    fn : Callable
+        Base CEC 2005 function.
+    ndim : int
+        Number of input dimensions.
+    key : PRNGKeyArray
+        JAX random key.
+    num_components : int, optional
+        Number of composition components (default 1).
+    minval : float, optional
+        Lower bound for x_opt (default -100).
+    maxval : float, optional
+        Upper bound for x_opt (default 100).
+
+    Returns
+    -------
+    BBOBFn
+        Tuple of (partial function, optimal value).
     """
     total_keys = 2 * num_components + 2
     keys = jr.split(key, total_keys)
@@ -280,7 +715,34 @@ def make_randomized_cec2005_conditioned(
     maxval: float = 100.0,
     condition_numbers: jax.Array | None = None,
 ) -> BBOBFn:
-    """Factory for CEC 2005 functions with seeded, conditioned transforms."""
+    """Factory for CEC 2005 functions with conditioned transforms.
+
+    Wraps ``make_randomized_cec2005`` and replaces rotation
+    matrices with conditioned linear transforms when
+    ``condition_numbers`` is provided.
+
+    Parameters
+    ----------
+    fn : Callable
+        Base CEC 2005 function.
+    ndim : int
+        Number of input dimensions.
+    key : PRNGKeyArray
+        JAX random key.
+    num_components : int, optional
+        Number of composition components (default 1).
+    minval : float, optional
+        Lower bound for x_opt (default -100).
+    maxval : float, optional
+        Upper bound for x_opt (default 100).
+    condition_numbers : jax.Array or None, optional
+        Target condition numbers per component.
+
+    Returns
+    -------
+    BBOBFn
+        Tuple of (partial function, optimal value).
+    """
     partial_fn, f_opt_val = make_randomized_cec2005(
         fn, ndim, key, num_components, minval=minval, maxval=maxval
     )
@@ -307,9 +769,26 @@ def make_deterministic_cec2005(
     key: PRNGKeyArray | None = None,
     num_components: int = 1,
 ) -> BBOBFn:
-    """Factory for CEC 2005 functions with zero shift and identity rotations.
+    """Deterministic CEC 2005 factory with zero shift.
 
-    key is accepted and ignored so both registries have identical signatures.
+    Uses identity rotations. ``key`` is accepted and ignored
+    so both registries have identical signatures.
+
+    Parameters
+    ----------
+    fn : Callable
+        Base CEC 2005 function.
+    ndim : int
+        Number of input dimensions.
+    key : PRNGKeyArray or None, optional
+        Ignored; accepted for signature compatibility.
+    num_components : int, optional
+        Number of composition components (default 1).
+
+    Returns
+    -------
+    BBOBFn
+        Tuple of (partial function, optimal value).
     """
     f_opt_val = jnp.array(0.0)
     if num_components == 1:
@@ -413,6 +892,7 @@ def _make_randomized_cec2005_conditioned_single(
     maxval: float,
     condition_number: float,
 ) -> BBOBFn:
+    """Single-component conditioned CEC 2005 factory."""
     return make_randomized_cec2005_conditioned(
         fn,
         ndim,
@@ -473,6 +953,92 @@ def _make_randomized_cec2005_f20(
 
 
 _NC = 10  # num_components for all composition functions (F15-F25)
+
+# Lambda arrays shared by composition function groups
+_COMP1_LAMBDA = jnp.array(
+    [1, 1, 10, 10, 5 / 60, 5 / 60, 5 / 32, 5 / 32, 5 / 100, 5 / 100]
+)
+_COMP2_LAMBDA_F18 = jnp.array(
+    [
+        2 * 5 / 32,
+        5 / 32,
+        2 * 1,
+        1,
+        2 * 5 / 100,
+        5 / 100,
+        2 * 10,
+        10,
+        2 * 5 / 60,
+        5 / 60,
+    ]
+)
+_COMP2_LAMBDA_F19 = jnp.array(
+    [
+        0.1 * 5 / 32,
+        5 / 32,
+        2 * 1,
+        1,
+        2 * 5 / 100,
+        5 / 100,
+        2 * 10,
+        10,
+        2 * 5 / 60,
+        5 / 60,
+    ]
+)
+_COMP3_LAMBDA = jnp.array(
+    [
+        5 * 5 / 100,
+        5 / 100,
+        5 * 1,
+        1,
+        5 * 1,
+        1,
+        5 * 10,
+        10,
+        5 * 5 / 200,
+        5 / 200,
+    ]
+)
+
+
+def _add_f_max(
+    base_factory: Callable,
+    comp_fns_builder: Callable,
+    comp_lambda: jax.Array,
+    fn: Callable,
+    ndim: int,
+    key: PRNGKeyArray,
+    **factory_kwargs: Any,
+) -> BBOBFn:
+    """Wrap any CEC2005 factory to add precomputed _f_max."""
+    partial_fn, f_opt_val = base_factory(fn, ndim, key, **factory_kwargs)
+    kw = _partial_keywords(partial_fn)
+    M = kw["R"]
+    # F15 uses identity stacks, but M is already set correctly by the factory
+    fns = comp_fns_builder()
+    f_max = compute_composition_f_max(fns, comp_lambda, M, ndim)
+    return Partial(fn, **kw, _f_max=f_max), f_opt_val
+
+
+def _add_f_max_deterministic(
+    comp_fns_builder: Callable,
+    comp_lambda: jax.Array,
+    fn: Callable,
+    ndim: int,
+    key: PRNGKeyArray | None = None,
+    num_components: int = _NC,
+) -> BBOBFn:
+    """Deterministic factory with precomputed _f_max."""
+    partial_fn, f_opt_val = make_deterministic_cec2005(
+        fn, ndim, key, num_components
+    )
+    kw = _partial_keywords(partial_fn)
+    M = kw["R"]
+    fns = comp_fns_builder()
+    f_max = compute_composition_f_max(fns, comp_lambda, M, ndim)
+    return Partial(fn, **kw, _f_max=f_max), f_opt_val
+
 
 cec2005_registry: dict[str, Callable] = {
     "f1": Partial(
@@ -550,14 +1116,20 @@ cec2005_registry: dict[str, Callable] = {
         condition_number=3.0,
     ),
     "f15": Partial(
-        make_randomized_cec2005,
+        _add_f_max,
+        base_factory=make_randomized_cec2005,
+        comp_fns_builder=_composition1_fns,
+        comp_lambda=_COMP1_LAMBDA,
         fn=f15,
         num_components=_NC,
         minval=-5.0,
         maxval=5.0,
     ),
     "f16": Partial(
-        make_randomized_cec2005_conditioned,
+        _add_f_max,
+        base_factory=make_randomized_cec2005_conditioned,
+        comp_fns_builder=_composition1_fns,
+        comp_lambda=_COMP1_LAMBDA,
         fn=f16,
         num_components=_NC,
         minval=-5.0,
@@ -565,21 +1137,44 @@ cec2005_registry: dict[str, Callable] = {
         condition_numbers=jnp.full((_NC,), 2.0, dtype=jnp.float32),
     ),
     "f17": Partial(
-        make_randomized_cec2005,
+        _add_f_max,
+        base_factory=make_randomized_cec2005,
+        comp_fns_builder=_composition1_fns,
+        comp_lambda=_COMP1_LAMBDA,
         fn=f17,
         num_components=_NC,
         minval=-5.0,
         maxval=5.0,
     ),
     "f18": Partial(
-        _make_randomized_cec2005_f18_family, fn=f18, num_components=_NC
+        _add_f_max,
+        base_factory=_make_randomized_cec2005_f18_family,
+        comp_fns_builder=_composition2_fns,
+        comp_lambda=_COMP2_LAMBDA_F18,
+        fn=f18,
+        num_components=_NC,
     ),
     "f19": Partial(
-        _make_randomized_cec2005_f18_family, fn=f19, num_components=_NC
+        _add_f_max,
+        base_factory=_make_randomized_cec2005_f18_family,
+        comp_fns_builder=_composition2_fns,
+        comp_lambda=_COMP2_LAMBDA_F19,
+        fn=f19,
+        num_components=_NC,
     ),
-    "f20": Partial(_make_randomized_cec2005_f20, fn=f20, num_components=_NC),
+    "f20": Partial(
+        _add_f_max,
+        base_factory=_make_randomized_cec2005_f20,
+        comp_fns_builder=_composition2_fns,
+        comp_lambda=_COMP2_LAMBDA_F18,
+        fn=f20,
+        num_components=_NC,
+    ),
     "f21": Partial(
-        make_randomized_cec2005_conditioned,
+        _add_f_max,
+        base_factory=make_randomized_cec2005_conditioned,
+        comp_fns_builder=_composition3_fns,
+        comp_lambda=_COMP3_LAMBDA,
         fn=f21,
         num_components=_NC,
         minval=-5.0,
@@ -587,7 +1182,10 @@ cec2005_registry: dict[str, Callable] = {
         condition_numbers=jnp.ones((_NC,), dtype=jnp.float32),
     ),
     "f22": Partial(
-        make_randomized_cec2005_conditioned,
+        _add_f_max,
+        base_factory=make_randomized_cec2005_conditioned,
+        comp_fns_builder=_composition3_fns,
+        comp_lambda=_COMP3_LAMBDA,
         fn=f22,
         num_components=_NC,
         minval=-5.0,
@@ -598,7 +1196,10 @@ cec2005_registry: dict[str, Callable] = {
         ),
     ),
     "f23": Partial(
-        make_randomized_cec2005_conditioned,
+        _add_f_max,
+        base_factory=make_randomized_cec2005_conditioned,
+        comp_fns_builder=_composition3_fns,
+        comp_lambda=_COMP3_LAMBDA,
         fn=f23,
         num_components=_NC,
         minval=-5.0,
@@ -642,15 +1243,69 @@ cec2005_registry_original: dict[str, Callable] = {
     "f12": Partial(make_deterministic_cec2005, fn=f12, num_components=1),
     "f13": Partial(make_deterministic_cec2005, fn=f13, num_components=1),
     "f14": Partial(make_deterministic_cec2005, fn=f14, num_components=1),
-    "f15": Partial(make_deterministic_cec2005, fn=f15, num_components=_NC),
-    "f16": Partial(make_deterministic_cec2005, fn=f16, num_components=_NC),
-    "f17": Partial(make_deterministic_cec2005, fn=f17, num_components=_NC),
-    "f18": Partial(make_deterministic_cec2005, fn=f18, num_components=_NC),
-    "f19": Partial(make_deterministic_cec2005, fn=f19, num_components=_NC),
-    "f20": Partial(make_deterministic_cec2005, fn=f20, num_components=_NC),
-    "f21": Partial(make_deterministic_cec2005, fn=f21, num_components=_NC),
-    "f22": Partial(make_deterministic_cec2005, fn=f22, num_components=_NC),
-    "f23": Partial(make_deterministic_cec2005, fn=f23, num_components=_NC),
+    "f15": Partial(
+        _add_f_max_deterministic,
+        comp_fns_builder=_composition1_fns,
+        comp_lambda=_COMP1_LAMBDA,
+        fn=f15,
+        num_components=_NC,
+    ),
+    "f16": Partial(
+        _add_f_max_deterministic,
+        comp_fns_builder=_composition1_fns,
+        comp_lambda=_COMP1_LAMBDA,
+        fn=f16,
+        num_components=_NC,
+    ),
+    "f17": Partial(
+        _add_f_max_deterministic,
+        comp_fns_builder=_composition1_fns,
+        comp_lambda=_COMP1_LAMBDA,
+        fn=f17,
+        num_components=_NC,
+    ),
+    "f18": Partial(
+        _add_f_max_deterministic,
+        comp_fns_builder=_composition2_fns,
+        comp_lambda=_COMP2_LAMBDA_F18,
+        fn=f18,
+        num_components=_NC,
+    ),
+    "f19": Partial(
+        _add_f_max_deterministic,
+        comp_fns_builder=_composition2_fns,
+        comp_lambda=_COMP2_LAMBDA_F19,
+        fn=f19,
+        num_components=_NC,
+    ),
+    "f20": Partial(
+        _add_f_max_deterministic,
+        comp_fns_builder=_composition2_fns,
+        comp_lambda=_COMP2_LAMBDA_F18,
+        fn=f20,
+        num_components=_NC,
+    ),
+    "f21": Partial(
+        _add_f_max_deterministic,
+        comp_fns_builder=_composition3_fns,
+        comp_lambda=_COMP3_LAMBDA,
+        fn=f21,
+        num_components=_NC,
+    ),
+    "f22": Partial(
+        _add_f_max_deterministic,
+        comp_fns_builder=_composition3_fns,
+        comp_lambda=_COMP3_LAMBDA,
+        fn=f22,
+        num_components=_NC,
+    ),
+    "f23": Partial(
+        _add_f_max_deterministic,
+        comp_fns_builder=_composition3_fns,
+        comp_lambda=_COMP3_LAMBDA,
+        fn=f23,
+        num_components=_NC,
+    ),
     "f24": Partial(make_deterministic_cec2005, fn=f24, num_components=_NC),
     "f25": Partial(make_deterministic_cec2005, fn=f25, num_components=_NC),
 }

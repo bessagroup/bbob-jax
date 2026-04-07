@@ -1,3 +1,10 @@
+"""BBOB (Black-Box Optimization Benchmark) noise-free functions.
+
+Implements the 24 BBOB benchmark functions. Each function
+has the internal signature ``fn(x, x_opt, f_opt, R, Q)``
+and is partially applied via the registry for end-user use.
+"""
+
 #                                                                       Modules
 # =============================================================================
 
@@ -209,6 +216,8 @@ def linear_slope(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _ls_x_opt: jax.Array | None = None,
+    _ls_s: jax.Array | None = None,
 ) -> jax.Array:
     """Linear slope function (F5).
 
@@ -229,6 +238,10 @@ def linear_slope(
         Rotation matrix.
     Q : jax.Array
         Second rotation matrix.
+    _ls_x_opt : jax.Array, optional
+        Precomputed optimal point override (derived from Q).
+    _ls_s : jax.Array, optional
+        Precomputed slope vector.
 
     Returns
     -------
@@ -236,17 +249,19 @@ def linear_slope(
         Function value(s).
     """
     ndim = x.shape[-1]
-    key = jr.key(0)
-    key = jr.fold_in(key, Q[0, 0])
 
-    x_opt = 5 * bernoulli_vector(ndim, key)
-    i = jnp.arange(1, ndim + 1, dtype=x.dtype)
-    s = jnp.sign(x_opt) * jnp.power(10.0, (i - 1) / (ndim - 1))
+    if _ls_x_opt is None:
+        key = jr.key(0)
+        key = jr.fold_in(key, Q[0, 0])
+        _ls_x_opt = 5 * bernoulli_vector(ndim, key)
+    if _ls_s is None:
+        i = jnp.arange(1, ndim + 1, dtype=x.dtype)
+        _ls_s = jnp.sign(_ls_x_opt) * jnp.power(10.0, (i - 1) / (ndim - 1))
 
-    cond = x_opt * x < 25.0
-    z = jnp.where(cond, x, x_opt)
+    cond = _ls_x_opt * x < 25.0
+    z = jnp.where(cond, x, _ls_x_opt)
 
-    result = jnp.sum(5.0 * jnp.abs(s) - s * z)
+    result = jnp.sum(5.0 * jnp.abs(_ls_s) - _ls_s * z)
     return result + f_opt
 
 
@@ -256,6 +271,7 @@ def attractive_sector(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _mat: jax.Array | None = None,
 ) -> jax.Array:
     """Attractive sector function (F6).
 
@@ -278,6 +294,8 @@ def attractive_sector(
         Rotation matrix.
     Q : jax.Array
         Second rotation matrix.
+    _mat : jax.Array, optional
+        Precomputed transformation matrix (Q @ lambda @ R).
 
     Returns
     -------
@@ -285,8 +303,9 @@ def attractive_sector(
         Function value(s).
     """
     ndim = x.shape[-1]
-    lamb = lambda_func(ndim, alpha=10.0)
-    z = Q @ lamb @ R @ (x - x_opt)
+    if _mat is None:
+        _mat = Q @ lambda_func(ndim, alpha=10.0) @ R
+    z = _mat @ (x - x_opt)
     cond = sj.greater_st(z * x_opt, 0.0)
     s = sj.where(cond, jnp.array(100.0), jnp.array(1.0))
 
@@ -303,6 +322,7 @@ def step_ellipsoid(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _mat: jax.Array | None = None,
 ) -> jax.Array:
     """Step ellipsoid function (F7).
 
@@ -325,6 +345,8 @@ def step_ellipsoid(
         Rotation matrix.
     Q : jax.Array
         Second rotation matrix.
+    _mat : jax.Array, optional
+        Precomputed transformation matrix (lambda @ R).
 
     Returns
     -------
@@ -333,11 +355,12 @@ def step_ellipsoid(
     """
     ndim = x.shape[-1]
     i = jnp.arange(1, ndim + 1, dtype=x.dtype)
-    lamb = lambda_func(ndim, alpha=10.0)
+    if _mat is None:
+        _mat = lambda_func(ndim, alpha=10.0) @ R
     mult = jnp.power(10.0, 2 * ((i - 1) / (ndim - 1)))
 
     # Compute ẑ
-    z_hat = lamb @ R @ (x - x_opt)
+    z_hat = _mat @ (x - x_opt)
 
     # Compute z′ using functional indexing
     z_dash = 0.5 + jnp.where(jnp.abs(z_hat) > 0.5, z_hat, 10 * z_hat)
@@ -588,6 +611,7 @@ def sharp_ridge(
     R: jax.Array,
     Q: jax.Array,
     f_opt: jax.Array,
+    _mat: jax.Array | None = None,
 ) -> jax.Array:
     """Sharp ridge function (F13).
 
@@ -608,6 +632,8 @@ def sharp_ridge(
         Second rotation matrix.
     f_opt : jax.Array
         Optimal function value offset.
+    _mat : jax.Array, optional
+        Precomputed transformation matrix (Q @ lambda @ R).
 
     Returns
     -------
@@ -615,8 +641,9 @@ def sharp_ridge(
         Function value(s).
     """
     ndim = x.shape[-1]
-    lamb = lambda_func(ndim, alpha=10.0)
-    z = Q @ lamb @ R @ (x - x_opt)
+    if _mat is None:
+        _mat = Q @ lambda_func(ndim, alpha=10.0) @ R
+    z = _mat @ (x - x_opt)
     result: jax.Array = (
         z[0] ** 2 + 100.0 * sj.sqrt(jnp.sum(z[1:] ** 2)) + f_opt
     )
@@ -669,6 +696,7 @@ def rastrigin(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _mat: jax.Array | None = None,
 ) -> jax.Array:
     """Rastrigin function (F15).
 
@@ -690,6 +718,8 @@ def rastrigin(
         Rotation matrix.
     Q : jax.Array
         Second rotation matrix.
+    _mat : jax.Array, optional
+        Precomputed transformation matrix (R @ lambda @ Q).
 
     Returns
     -------
@@ -697,8 +727,9 @@ def rastrigin(
         Function value(s).
     """
     ndim = x.shape[-1]
-    lamb = lambda_func(ndim, alpha=10.0)
-    z = R @ lamb @ Q @ tasy_func(tosz_func(R @ (x - x_opt)), beta=0.2)
+    if _mat is None:
+        _mat = R @ lambda_func(ndim, alpha=10.0) @ Q
+    z = _mat @ tasy_func(tosz_func(R @ (x - x_opt)), beta=0.2)
 
     return (
         10.0 * (ndim - jnp.sum(jnp.cos(2.0 * jnp.pi * z))) * jnp.sum(z**2)
@@ -712,6 +743,7 @@ def weierstrass(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _mat: jax.Array | None = None,
 ) -> jax.Array:
     """Weierstrass function (F16).
 
@@ -733,6 +765,8 @@ def weierstrass(
         Rotation matrix.
     Q : jax.Array
         Second rotation matrix.
+    _mat : jax.Array, optional
+        Precomputed transformation matrix (R @ lambda @ Q).
 
     Returns
     -------
@@ -740,8 +774,9 @@ def weierstrass(
         Function value(s).
     """
     ndim = x.shape[-1]
-    lamb = lambda_func(ndim, alpha=0.01)
-    z = R @ lamb @ Q @ tosz_func(R @ (x - x_opt))
+    if _mat is None:
+        _mat = R @ lambda_func(ndim, alpha=0.01) @ Q
+    z = _mat @ tosz_func(R @ (x - x_opt))
 
     k = jnp.arange(0, 12, dtype=x.dtype)
     bk = 3.0**k
@@ -766,6 +801,7 @@ def schaffer_f7_condition_10(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _mat: jax.Array | None = None,
 ) -> jax.Array:
     """Schaffer F7 function with conditioning 10 (F17).
 
@@ -788,6 +824,8 @@ def schaffer_f7_condition_10(
         Rotation matrix.
     Q : jax.Array
         Second rotation matrix.
+    _mat : jax.Array, optional
+        Precomputed transformation matrix (lambda @ Q).
 
     Returns
     -------
@@ -795,8 +833,9 @@ def schaffer_f7_condition_10(
         Function value(s).
     """
     ndim = x.shape[-1]
-    lamb = lambda_func(ndim, alpha=10.0)
-    z = lamb @ Q @ tasy_func(R @ (x - x_opt), beta=0.5)
+    if _mat is None:
+        _mat = lambda_func(ndim, alpha=10.0) @ Q
+    z = _mat @ tasy_func(R @ (x - x_opt), beta=0.5)
 
     s = sj.sqrt(z[:-1] ** 2 + z[1:] ** 2)
 
@@ -815,6 +854,7 @@ def schaffer_f7_condition_1000(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _mat: jax.Array | None = None,
 ) -> jax.Array:
     """Schaffer F7 function with conditioning 1000 (F18).
 
@@ -837,6 +877,8 @@ def schaffer_f7_condition_1000(
         Rotation matrix.
     Q : jax.Array
         Second rotation matrix.
+    _mat : jax.Array, optional
+        Precomputed transformation matrix (lambda @ Q).
 
     Returns
     -------
@@ -844,8 +886,9 @@ def schaffer_f7_condition_1000(
         Function value(s).
     """
     ndim = x.shape[-1]
-    lamb = lambda_func(ndim, alpha=1000.0)
-    z = lamb @ Q @ tasy_func(R @ (x - x_opt), beta=0.5)
+    if _mat is None:
+        _mat = lambda_func(ndim, alpha=1000.0) @ Q
+    z = _mat @ tasy_func(R @ (x - x_opt), beta=0.5)
 
     s = sj.sqrt(z[:-1] ** 2 + z[1:] ** 2)
 
@@ -913,6 +956,10 @@ def schwefel_xsinx(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _sw_ones: jax.Array | None = None,
+    _sw_x_opt_shape: jax.Array | None = None,
+    _sw_lamb: jax.Array | None = None,
+    _sw_f_ref: jax.Array | None = None,
 ) -> jax.Array:
     """Schwefel x*sin(x) function (F20).
 
@@ -943,6 +990,14 @@ def schwefel_xsinx(
         Rotation matrix.
     Q : jax.Array
         Second rotation matrix.
+    _sw_ones : jax.Array, optional
+        Precomputed Bernoulli sign vector (derived from Q).
+    _sw_x_opt_shape : jax.Array, optional
+        Precomputed optimal shape vector.
+    _sw_lamb : jax.Array, optional
+        Precomputed conditioning matrix (lambda).
+    _sw_f_ref : jax.Array, optional
+        Precomputed reference function value for zero-offset.
 
     Returns
     -------
@@ -950,24 +1005,27 @@ def schwefel_xsinx(
         Function value(s).
     """
     ndim = x.shape[-1]
-    key = jr.key(0)
-    key = jr.fold_in(key, Q[0, 0])
-    ones = bernoulli_vector(ndim, key)
-    lamb = lambda_func(ndim, alpha=10.0)
 
-    x_opt_shape = 4.2096874633 / 2 * ones
+    if _sw_ones is None:
+        key = jr.key(0)
+        key = jr.fold_in(key, Q[0, 0])
+        _sw_ones = bernoulli_vector(ndim, key)
+    if _sw_x_opt_shape is None:
+        _sw_x_opt_shape = 4.2096874633 / 2 * _sw_ones
+    if _sw_lamb is None:
+        _sw_lamb = lambda_func(ndim, alpha=10.0)
 
     # helper for shift
-    x_trans = x - x_opt + x_opt_shape
-    x_hat = 2.0 * ones * x_trans
+    x_trans = x - x_opt + _sw_x_opt_shape
+    x_hat = 2.0 * _sw_ones * x_trans
 
     z_hat = x_hat.at[..., 1:].add(
-        0.25 * (x_hat[..., :-1] - 2.0 * jnp.abs(x_opt_shape[..., :-1]))
+        0.25 * (x_hat[..., :-1] - 2.0 * jnp.abs(_sw_x_opt_shape[..., :-1]))
     )
 
     z = 100.0 * (
-        lamb @ (z_hat - 2.0 * jnp.abs(x_opt_shape))
-        + 2.0 * jnp.abs(x_opt_shape)
+        _sw_lamb @ (z_hat - 2.0 * jnp.abs(_sw_x_opt_shape))
+        + 2.0 * jnp.abs(_sw_x_opt_shape)
     )
 
     f = (
@@ -979,9 +1037,80 @@ def schwefel_xsinx(
     # Penalization
     pen = 100.0 * penalty(z / 100.0)
 
-    z_ref = 200.0 * jnp.abs(x_opt_shape)
-    f_ref = 1.0 / (100.0 * ndim) * jnp.sum(z_ref * jnp.sin(jnp.sqrt(z_ref)))
-    return f + f_ref + pen + f_opt
+    if _sw_f_ref is None:
+        z_ref = 200.0 * jnp.abs(_sw_x_opt_shape)
+        _sw_f_ref = (
+            1.0 / (100.0 * ndim) * jnp.sum(z_ref * jnp.sin(jnp.sqrt(z_ref)))
+        )
+    return f + _sw_f_ref + pen + f_opt
+
+
+def _precompute_gallagher(
+    x_opt: jax.Array,
+    Q: jax.Array,
+    ndim: int,
+    num_peaks: int,
+    w_divisor: int,
+    alpha_first: float,
+    y_minval: float,
+    y_maxval: float,
+) -> tuple[jax.Array, jax.Array, jax.Array]:
+    """Precompute Gallagher peak weights and locations.
+
+    Parameters
+    ----------
+    x_opt : jax.Array
+        Optimal point for the first peak.
+    Q : jax.Array
+        Rotation matrix (used to seed the RNG).
+    ndim : int
+        Number of input dimensions.
+    num_peaks : int
+        Number of Gallagher peaks.
+    w_divisor : int
+        Divisor for computing peak weights.
+    alpha_first : float
+        Conditioning number for the first peak.
+    y_minval : float
+        Lower bound for random peak locations.
+    y_maxval : float
+        Upper bound for random peak locations.
+
+    Returns
+    -------
+    tuple[jax.Array, jax.Array, jax.Array]
+        Peak weights, peak locations, and conditioning
+        diagonal vectors.
+    """
+    key = jr.key(0)
+    key = jr.fold_in(key, Q[0, 0])
+    key1, key2 = jr.split(key)
+
+    i = jnp.arange(1, num_peaks + 1, dtype=jnp.float32)
+    j = jnp.arange(0, num_peaks - 1, dtype=jnp.float32)
+
+    w = 1.1 + 8.0 * ((i - 2) / w_divisor)
+    w = w.at[0].set(10.0)
+
+    a = jnp.power(1000, 2.0 * (j / (num_peaks - 1)))
+    alpha = jr.permutation(key1, a)
+    alpha = jnp.concatenate([jnp.array([alpha_first]), alpha])
+
+    y = jr.uniform(
+        key2, shape=(num_peaks, ndim), minval=y_minval, maxval=y_maxval
+    )
+    y = y.at[0].set(x_opt)
+
+    # Compute diagonal vectors instead of full (ndim x ndim) matrices.
+    # lambda_func(ndim, alpha_i) = diag(alpha_i^(idx / (2*(ndim-1))))
+    # Then divided by alpha_i^0.25.
+    idx = jnp.arange(ndim, dtype=jnp.float32)
+    # alpha: (num_peaks,), idx: (ndim,) -> c_diags: (num_peaks, ndim)
+    c_diags = jnp.power(
+        alpha[:, None], idx[None, :] / (2 * (ndim - 1))
+    ) / jnp.power(alpha[:, None], 0.25)
+
+    return w, y, c_diags
 
 
 def gallagher_101_peaks(
@@ -990,6 +1119,9 @@ def gallagher_101_peaks(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _gal_w: jax.Array | None = None,
+    _gal_y: jax.Array | None = None,
+    _gal_c_diags: jax.Array | None = None,
 ) -> jax.Array:
     """Gallagher 101 peaks function (F21).
 
@@ -1012,6 +1144,12 @@ def gallagher_101_peaks(
         Rotation matrix.
     Q : jax.Array
         Second rotation matrix.
+    _gal_w : jax.Array, optional
+        Precomputed peak weight vector of shape (101,).
+    _gal_y : jax.Array, optional
+        Precomputed peak location matrix of shape (101, ndim).
+    _gal_c_diags : jax.Array, optional
+        Precomputed conditioning diagonal vectors of shape (101, ndim).
 
     Returns
     -------
@@ -1019,33 +1157,22 @@ def gallagher_101_peaks(
         Function value(s).
     """
     ndim = x.shape[-1]
-    key = jr.key(0)
-    key = jr.fold_in(key, Q[0, 0])
-    key1, key2 = jr.split(key)
-    i = jnp.arange(1, 102, dtype=jnp.float32)
-    j = jnp.arange(0, 100, dtype=jnp.float32)
 
-    w = 1.1 + 8.0 * ((i - 2) / 99)
-    w = w.at[0].set(10.0)
+    if _gal_w is None:
+        w, y, c_diags = _precompute_gallagher(
+            x_opt, Q, ndim, 101, 99, 1000.0, -5.0, 5.0
+        )
+    else:
+        assert _gal_y is not None
+        assert _gal_c_diags is not None
+        w, y, c_diags = _gal_w, _gal_y, _gal_c_diags
 
-    a = jnp.power(1000, 2.0 * (j / 99.0))
-    alpha = jr.permutation(key1, a)
-    alpha = jnp.concatenate([jnp.array([1000.0]), alpha])
-
-    y = jr.uniform(key2, shape=(*i.shape, ndim), minval=-5.0, maxval=5.0)
-    y = y.at[0].set(x_opt)
-
-    C = jax.vmap(lambda_func, in_axes=(None, 0))(ndim, alpha)
-
-    C /= jnp.power(alpha, 0.25)[:, None, None]
-
-    diff = x[None, :] - y
-
-    def apply_C(C_i: jax.Array, d_i: jax.Array, w_i: jax.Array) -> jax.Array:
-        val = -(1.0 / (2.0 * ndim)) * d_i.T @ (R.T @ C_i @ R) @ d_i
-        return w_i * jnp.exp(val)
-
-    inside_max = jax.vmap(apply_C)(C, diff, w)
+    diff = x[None, :] - y  # (101, ndim)
+    rotated_diff = jnp.einsum("ij,...j->...i", R, diff)  # (101, ndim)
+    exponents = -(1.0 / (2.0 * ndim)) * jnp.sum(
+        c_diags * rotated_diff**2, axis=-1
+    )  # (101,)
+    inside_max = w * jnp.exp(exponents)  # (101,)
 
     f = 10.0 - sj.max_st(inside_max, axis=0)
 
@@ -1062,6 +1189,9 @@ def gallagher_21_peaks(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _gal_w: jax.Array | None = None,
+    _gal_y: jax.Array | None = None,
+    _gal_c_diags: jax.Array | None = None,
 ) -> jax.Array:
     """Gallagher 21 peaks function (F22).
 
@@ -1084,6 +1214,12 @@ def gallagher_21_peaks(
         Rotation matrix.
     Q : jax.Array
         Second rotation matrix.
+    _gal_w : jax.Array, optional
+        Precomputed peak weight vector of shape (21,).
+    _gal_y : jax.Array, optional
+        Precomputed peak location matrix of shape (21, ndim).
+    _gal_c_diags : jax.Array, optional
+        Precomputed conditioning diagonal vectors of shape (21, ndim).
 
     Returns
     -------
@@ -1091,33 +1227,22 @@ def gallagher_21_peaks(
         Function value(s).
     """
     ndim = x.shape[-1]
-    key = jr.key(0)
-    key = jr.fold_in(key, Q[0, 0])
-    key1, key2 = jr.split(key)
-    i = jnp.arange(1, 22, dtype=jnp.float32)
-    j = jnp.arange(0, 20, dtype=jnp.float32)
 
-    w = 1.1 + 8.0 * ((i - 2) / 19)
-    w = w.at[0].set(10.0)
+    if _gal_w is None:
+        w, y, c_diags = _precompute_gallagher(
+            x_opt, Q, ndim, 21, 19, 1000.0**2, -4.9, 4.9
+        )
+    else:
+        assert _gal_y is not None
+        assert _gal_c_diags is not None
+        w, y, c_diags = _gal_w, _gal_y, _gal_c_diags
 
-    a = jnp.power(1000, 2.0 * (j / 19.0))
-    alpha = jr.permutation(key1, a)
-    alpha = jnp.concatenate([jnp.array([1000.0**2]), alpha])
-
-    y = jr.uniform(key2, shape=(*i.shape, ndim), minval=-4.9, maxval=4.9)
-    y = y.at[0].set(x_opt)
-
-    C = jax.vmap(lambda_func, in_axes=(None, 0))(ndim, alpha)
-
-    C /= jnp.power(alpha, 0.25)[:, None, None]
-
-    diff = x[None, :] - y
-
-    def apply_C(C_i: jax.Array, d_i: jax.Array, w_i: jax.Array) -> jax.Array:
-        val = -(1.0 / (2.0 * ndim)) * d_i.T @ (R.T @ C_i @ R) @ d_i
-        return w_i * jnp.exp(val)
-
-    inside_max = jax.vmap(apply_C)(C, diff, w)
+    diff = x[None, :] - y  # (21, ndim)
+    rotated_diff = jnp.einsum("ij,...j->...i", R, diff)  # (21, ndim)
+    exponents = -(1.0 / (2.0 * ndim)) * jnp.sum(
+        c_diags * rotated_diff**2, axis=-1
+    )  # (21,)
+    inside_max = w * jnp.exp(exponents)  # (21,)
 
     f = 10.0 - sj.max_st(inside_max, axis=0)
 
@@ -1134,6 +1259,7 @@ def katsuura(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _mat: jax.Array | None = None,
 ) -> jax.Array:
     """Katsuura function (F23).
 
@@ -1155,6 +1281,8 @@ def katsuura(
         Rotation matrix.
     Q : jax.Array
         Second rotation matrix.
+    _mat : jax.Array, optional
+        Precomputed transformation matrix (Q @ lambda @ R).
 
     Returns
     -------
@@ -1162,8 +1290,9 @@ def katsuura(
         Function value(s).
     """
     ndim = x.shape[-1]
-    lamb = lambda_func(ndim, alpha=100.0)
-    z = Q @ lamb @ R @ (x - x_opt)
+    if _mat is None:
+        _mat = Q @ lambda_func(ndim, alpha=100.0) @ R
+    z = _mat @ (x - x_opt)
 
     J = 2.0 ** jnp.arange(1, 33, dtype=jnp.float32)  # (32,)
     # jsum term: shape (32, dim)
@@ -1194,6 +1323,10 @@ def lunacek_bi_rastrigin(
     R: jax.Array,
     Q: jax.Array,
     f_opt: jax.Array,
+    _mat: jax.Array | None = None,
+    _x_opt_shape: jax.Array | None = None,
+    _s: jax.Array | None = None,
+    _mu1: jax.Array | None = None,
 ) -> jax.Array:
     """Lunacek bi-Rastrigin function (F24).
 
@@ -1216,6 +1349,14 @@ def lunacek_bi_rastrigin(
         Second rotation matrix.
     f_opt : jax.Array
         Optimal function value offset.
+    _mat : jax.Array, optional
+        Precomputed transformation matrix (Q @ lambda @ R).
+    _x_opt_shape : jax.Array, optional
+        Precomputed optimal shape vector (derived from Q).
+    _s : jax.Array, optional
+        Precomputed conditioning parameter.
+    _mu1 : jax.Array, optional
+        Precomputed second funnel center.
 
     Returns
     -------
@@ -1223,27 +1364,31 @@ def lunacek_bi_rastrigin(
         Function value(s).
     """
     ndim = x.shape[-1]
-    key = jr.key(0)
-    key = jr.fold_in(key, Q[0, 0])
     mu0 = 2.5
     d = 1.0
-    s = 1.0 - 1.0 / (2.0 * jnp.sqrt(ndim + 20.0) - 8.2)
 
-    x_opt_shape = (mu0 / 2.0) * bernoulli_vector(ndim, key)
+    if _x_opt_shape is None:
+        key = jr.key(0)
+        key = jr.fold_in(key, Q[0, 0])
+        _x_opt_shape = (mu0 / 2.0) * bernoulli_vector(ndim, key)
+    if _s is None:
+        _s = 1.0 - 1.0 / (2.0 * jnp.sqrt(ndim + 20.0) - 8.2)
+    if _mu1 is None:
+        _mu1 = -jnp.sqrt((mu0**2 - d) / _s)
+    if _mat is None:
+        _mat = Q @ lambda_func(ndim, alpha=100.0) @ R
+
     # Shift x so that x_opt corresponds to x_opt_shape in the transformed space
-    x_trans = x - x_opt + x_opt_shape
-    x_hat = 2 * jnp.sign(x_opt_shape) * x_trans
+    x_trans = x - x_opt + _x_opt_shape
+    x_hat = 2 * jnp.sign(_x_opt_shape) * x_trans
 
-    lamb = lambda_func(ndim, alpha=100.0)
-    z = Q @ lamb @ R @ (x_hat - mu0 * jnp.ones_like(x))
-
-    mu1 = -jnp.sqrt((mu0**2 - d) / s)
+    z = _mat @ (x_hat - mu0 * jnp.ones_like(x))
 
     term1 = sj.min_st(
         jnp.stack(
             [
                 jnp.sum(jnp.power(x_hat - mu0, 2)),
-                d * ndim + s * jnp.sum(jnp.power(x_hat - mu1, 2)),
+                d * ndim + _s * jnp.sum(jnp.power(x_hat - _mu1, 2)),
             ]
         ),
     )

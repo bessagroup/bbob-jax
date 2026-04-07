@@ -1,3 +1,10 @@
+"""Utility functions for BBOB and CEC 2005 benchmarks.
+
+Provides transformations (tosz, tasy, lambda conditioning),
+random parameter generation, rotation matrices, penalty,
+and composition helpers used by the benchmark functions.
+"""
+
 from collections.abc import Callable
 from typing import cast
 
@@ -9,6 +16,7 @@ from jaxtyping import PRNGKeyArray
 
 
 def _finite_like(x: jax.Array) -> jax.Array:
+    """Clamp non-finite values to safe finite bounds."""
     finfo = jnp.finfo(x.dtype)
     return jnp.nan_to_num(
         x, nan=0.0, posinf=finfo.max / 1e6, neginf=finfo.min / 1e6
@@ -16,7 +24,18 @@ def _finite_like(x: jax.Array) -> jax.Array:
 
 
 def fopt(key: PRNGKeyArray) -> jax.Array:
-    """Generate a random optimal function value f_opt."""
+    """Generate a random optimal function value f_opt.
+
+    Parameters
+    ----------
+    key : PRNGKeyArray
+        JAX random key.
+
+    Returns
+    -------
+    jax.Array
+        Scalar optimal function value clipped to [-1000, 1000].
+    """
     return jnp.round(
         jnp.clip(100.0 * jr.cauchy(key, shape=()), min=-1000.0, max=1000.0), 2
     )
@@ -25,13 +44,30 @@ def fopt(key: PRNGKeyArray) -> jax.Array:
 def xopt(
     key: PRNGKeyArray, ndim: int, minval: float, maxval: float
 ) -> jax.Array:
-    """
-    Generate a random optimal solution x_opt within [minval, maxval]^ndim.
+    """Generate a random optimal solution x_opt.
+
+    Parameters
+    ----------
+    key : PRNGKeyArray
+        JAX random key.
+    ndim : int
+        Number of dimensions.
+    minval : float
+        Lower bound for each coordinate.
+    maxval : float
+        Upper bound for each coordinate.
+
+    Returns
+    -------
+    jax.Array
+        Random point of shape ``(ndim,)`` in
+        ``[minval, maxval]^ndim``.
     """
     return jr.uniform(key, shape=(ndim,), minval=minval, maxval=maxval)
 
 
 def tosz_func(x: jax.Array) -> jax.Array:
+    """Smooth log-sine deformation (T_osz) from the BBOB suite."""
     c1, c2 = 10.0, 7.9
     eps = 1e-12  # avoid log(0)
 
@@ -50,6 +86,7 @@ def tosz_func(x: jax.Array) -> jax.Array:
 
 
 def tasy_func(x: jax.Array, beta: float = 0.5) -> jax.Array:
+    """Asymmetry transformation (T_asy) from the BBOB suite."""
     ndim = x.shape[-1]
     idx = jnp.arange(0, ndim)
     up = 1 + beta * ((idx - 1) / (ndim - 1)) * sj.sqrt(jnp.abs(x))
@@ -58,13 +95,28 @@ def tasy_func(x: jax.Array, beta: float = 0.5) -> jax.Array:
 
 
 def lambda_func(size: int, alpha: float | jax.Array = 10.0) -> jax.Array:
+    """Diagonal conditioning matrix (Lambda) from the BBOB suite."""
     idx = jnp.arange(size, dtype=jnp.float32)
     diagonal = alpha ** (idx / (2 * (size - 1)))
     return jnp.diag(diagonal)
 
 
 def rotation_matrix(dim: int, key: jax.Array) -> jax.Array:
-    """Generate a random orthogonal rotation matrix."""
+    """Generate a random orthogonal rotation matrix.
+
+    Parameters
+    ----------
+    dim : int
+        Matrix dimension.
+    key : jax.Array
+        JAX random key.
+
+    Returns
+    -------
+    jax.Array
+        Orthogonal matrix of shape ``(dim, dim)`` with
+        determinant 1.
+    """
     R = jr.normal(key, shape=(dim, dim))
 
     # QR decomposition
@@ -85,11 +137,25 @@ def rotation_matrix(dim: int, key: jax.Array) -> jax.Array:
 
 
 def penalty(x: jax.Array) -> jax.Array:
+    """Boundary penalty: squared excess beyond [-5, 5]."""
     return jnp.sum(jnp.power(sj.relu_st(jnp.abs(x) - 5.0), 2), axis=-1)
 
 
 def bernoulli_vector(dim: int, key: jax.Array) -> jax.Array:
-    """Generate a random Bernoulli matrix with entries -1 or 1."""
+    """Generate a random Bernoulli vector with entries -1 or 1.
+
+    Parameters
+    ----------
+    dim : int
+        Length of the vector.
+    key : jax.Array
+        JAX random key.
+
+    Returns
+    -------
+    jax.Array
+        Vector of shape ``(dim,)`` with entries in {-1, 1}.
+    """
     return jr.bernoulli(key, p=0.5, shape=(dim,)).astype(jnp.float32) * 2 - 1
 
 
@@ -128,7 +194,18 @@ def _create_mesh(
 
 
 def ackley(x: jax.Array) -> jax.Array:
-    """Ackley function. Minimum 0 at origin. Accepts 1D input (ndim,)."""
+    """Ackley function. Minimum 0 at origin.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
     ndim = x.shape[-1]
     sum_sq = jnp.sum(jnp.square(x))
     sum_cos = jnp.sum(jnp.cos(2.0 * jnp.pi * x))
@@ -142,7 +219,18 @@ def ackley(x: jax.Array) -> jax.Array:
 
 
 def griewank(x: jax.Array) -> jax.Array:
-    """Griewank function. Minimum 0 at origin. Accepts 1D input (ndim,)."""
+    """Griewank function. Minimum 0 at origin.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
     ndim = x.shape[-1]
     indices = jnp.arange(1, ndim + 1, dtype=x.dtype)
     sum_sq = jnp.sum(jnp.square(x)) / 4000.0
@@ -151,20 +239,42 @@ def griewank(x: jax.Array) -> jax.Array:
 
 
 def scaffer_f6(x: jax.Array, y: jax.Array) -> jax.Array:
-    """Scaffer's F6 2D kernel. Minimum 0 at (0, 0). Accepts scalar inputs."""
+    """Scaffer's F6 2D kernel. Minimum 0 at (0, 0).
+
+    Parameters
+    ----------
+    x : jax.Array
+        First scalar input.
+    y : jax.Array
+        Second scalar input.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
     r2 = jnp.square(x) + jnp.square(y)
     radius = jnp.sqrt(r2 + 1e-12)
     return 0.5 + (jnp.sin(radius) ** 2 - 0.5) / (1.0 + 0.001 * r2) ** 2
 
 
 def cec2005_weierstrass(x: jax.Array) -> jax.Array:
-    """Weierstrass function with CEC 2005 parameters (a=0.5, b=3, 21 terms).
+    """Weierstrass function with CEC 2005 parameters.
 
-    Uses k = 0, 1, ..., 20 (jnp.arange(0, 21)). Named separately from the
-    existing BBOB weierstrass utility which uses 12 terms with different
-    params.
-    Minimum is 0 at origin by subtraction of the constant term.
-    Accepts 1D input (ndim,).
+    Uses ``a=0.5``, ``b=3``, and 21 terms (k = 0 .. 20).
+    Named separately from the BBOB weierstrass which uses
+    12 terms with different parameters. Minimum is 0 at
+    origin by subtraction of the constant term.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
     """
     a, b = 0.5, 3.0
     k = jnp.arange(0, 21, dtype=jnp.float32)
@@ -188,38 +298,60 @@ def hybrid_composition(
     x_opt: jax.Array,
     M: jax.Array,
     C: float = 2000.0,
+    _f_max: jax.Array | None = None,
 ) -> jax.Array:
     """Hybrid composition kernel for CEC 2005 F15-F25.
 
-    Uses the CEC 2005 composition structure with a smooth winner-take-all
-    approximation so the public benchmark functions remain compatible with
-    ``jax.grad``. The exact paper rule is provided separately in
+    Uses the CEC 2005 composition structure with a smooth
+    winner-take-all approximation so the public benchmark
+    functions remain compatible with ``jax.grad``. The exact
+    paper rule is provided separately in
     ``hybrid_composition_paper_exact``.
 
-    Paper structure:
-      z = ((x - o_i) / lambda_i) * M_i
-      fit_i = f_i(z)
-      f_max_i = f_i((y / lambda_i) * M_i), y = [5,...,5]
-      fit_i = C * fit_i / f_max_i
-      F(x) = sum(w_i * [fit_i + bias_i])
+    Paper structure::
 
-    fns is a Python list of base functions — always bound as a
-    Python constant at construction time, never a JAX-traced
-    argument. The Python loop over num_components is unrolled at
-    JIT trace time (num_components is fixed).
+        z = ((x - o_i) / lambda_i) * M_i
+        fit_i = f_i(z)
+        f_max_i = f_i((y / lambda_i) * M_i), y = [5,...,5]
+        fit_i = C * fit_i / f_max_i
+        F(x) = sum(w_i * [fit_i + bias_i])
 
-    Args:
-        x:        Input point, shape (ndim,)
-        fns:      Python list of num_components base functions
-        sigma:    Basin widths, shape (num_components,)
-        lambda_:  Per-component input stretch factors,
-                  shape (num_components,)
-        bias:     Per-component offsets [0, 100, ..., 900],
-                  shape (num_components,)
-        x_opt:    Component optima, shape (num_components, ndim)
-        M:        Per-component rotation matrices,
-                  shape (num_c, ndim, ndim)
-        C:        Height normalization constant (default 2000).
+    ``fns`` is a Python list of base functions — always bound
+    as a Python constant at construction time, never a
+    JAX-traced argument. The Python loop over
+    ``num_components`` is unrolled at JIT trace time.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input point, shape ``(ndim,)``.
+    fns : list
+        Python list of ``num_components`` base functions.
+    sigma : jax.Array
+        Basin widths, shape ``(num_components,)``.
+    lambda_ : jax.Array
+        Per-component input stretch factors,
+        shape ``(num_components,)``.
+    bias : jax.Array
+        Per-component offsets ``[0, 100, ..., 900]``,
+        shape ``(num_components,)``.
+    x_opt : jax.Array
+        Component optima,
+        shape ``(num_components, ndim)``.
+    M : jax.Array
+        Per-component rotation matrices,
+        shape ``(num_components, ndim, ndim)``.
+    C : float, optional
+        Height normalization constant (default 2000).
+    _f_max : jax.Array or None, optional
+        Precomputed reference normalization values,
+        shape ``(num_components,)``. When provided,
+        skips per-call reference point evaluation.
+
+    Returns
+    -------
+    jax.Array
+        Scalar composed function value.
     """
     ndim = x.shape[-1]
     num_components = len(fns)
@@ -235,28 +367,64 @@ def hybrid_composition(
     w_max = jax.lax.stop_gradient(jnp.max(w))
     # Smooth max indicator for differentiability
     is_max = jax.nn.softmax(1e4 * (w - w_max))
-    suppression = 1.0 - jnp.clip(w_max, 0.0, 1.0) ** 10
+    suppression = 1.0 - sj.clip_st(w_max, 0.0, 1.0) ** 10
     w = w * (is_max + (1.0 - is_max) * suppression)
     w = w / (sw + 1e-30)
 
     # --- Evaluate each component ---
-    y = 5.0 * jnp.ones(ndim)
-
     def component_value(i: int) -> jax.Array:
         # z = ((x - o_i) / lambda_i) * M_i
         z = M[i] @ ((x - x_opt[i]) / lambda_[i])
         fit = _finite_like(fns[i](z))
         # Height normalize: f_max = f_i((y / lambda_i) * M_i)
-        z_ref = M[i] @ (y / lambda_[i])
-        f_max = jnp.abs(_finite_like(fns[i](z_ref)))
+        if _f_max is not None:
+            f_max = _f_max[i]
+        else:
+            y = 5.0 * jnp.ones(ndim)
+            z_ref = M[i] @ (y / lambda_[i])
+            f_max = sj.abs_st(_finite_like(fns[i](z_ref)))
         use_norm = jnp.isfinite(f_max) & (f_max > 1e-30)
-        safe_f_max = jnp.where(use_norm, f_max, 1.0)
-        fit = jnp.where(use_norm, C * fit / safe_f_max, fit)
+        safe_f_max = sj.where(use_norm, f_max, 1.0)
+        fit = sj.where(use_norm, C * fit / safe_f_max, fit)
         fit = _finite_like(fit)
         return cast(jax.Array, fit + bias[i])
 
     values = jnp.stack([component_value(i) for i in range(num_components)])
     return jnp.sum(w * values)
+
+
+def compute_composition_f_max(
+    fns: list,
+    lambda_: jax.Array,
+    M: jax.Array,
+    ndim: int,
+) -> jax.Array:
+    """Precompute f_max normalization values.
+
+    Parameters
+    ----------
+    fns : list
+        Python list of base component functions.
+    lambda_ : jax.Array
+        Per-component stretch factors,
+        shape ``(num_components,)``.
+    M : jax.Array
+        Per-component rotation matrices,
+        shape ``(num_components, ndim, ndim)``.
+    ndim : int
+        Number of input dimensions.
+
+    Returns
+    -------
+    jax.Array
+        Reference values of shape ``(num_components,)``.
+    """
+    y = 5.0 * jnp.ones(ndim)
+    f_max_vals = []
+    for i in range(len(fns)):
+        z_ref = M[i] @ (y / lambda_[i])
+        f_max_vals.append(sj.abs_st(_finite_like(fns[i](z_ref))))
+    return jnp.stack(f_max_vals)
 
 
 def hybrid_composition_paper_exact(
@@ -269,7 +437,39 @@ def hybrid_composition_paper_exact(
     M: jax.Array,
     C: float = 2000.0,
 ) -> jax.Array:
-    """Reference implementation of the paper's exact composition rule."""
+    """Reference implementation of the paper's exact rule.
+
+    Non-differentiable variant of ``hybrid_composition``
+    using hard winner-take-all weighting.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input point, shape ``(ndim,)``.
+    fns : list
+        Python list of base component functions.
+    sigma : jax.Array
+        Basin widths, shape ``(num_components,)``.
+    lambda_ : jax.Array
+        Per-component stretch factors,
+        shape ``(num_components,)``.
+    bias : jax.Array
+        Per-component offsets,
+        shape ``(num_components,)``.
+    x_opt : jax.Array
+        Component optima,
+        shape ``(num_components, ndim)``.
+    M : jax.Array
+        Per-component rotation matrices,
+        shape ``(num_components, ndim, ndim)``.
+    C : float, optional
+        Height normalization constant (default 2000).
+
+    Returns
+    -------
+    jax.Array
+        Scalar composed function value.
+    """
     ndim = x.shape[-1]
     num_components = len(fns)
     diffs = x[None, :] - x_opt
@@ -285,10 +485,10 @@ def hybrid_composition_paper_exact(
         z = M[i] @ ((x - x_opt[i]) / lambda_[i])
         fit = _finite_like(fns[i](z))
         z_ref = M[i] @ (y / lambda_[i])
-        f_max = jnp.abs(_finite_like(fns[i](z_ref)))
+        f_max = sj.abs_st(_finite_like(fns[i](z_ref)))
         use_norm = jnp.isfinite(f_max) & (f_max > 1e-30)
-        safe_f_max = jnp.where(use_norm, f_max, 1.0)
-        fit = jnp.where(use_norm, C * fit / safe_f_max, fit)
+        safe_f_max = sj.where(use_norm, f_max, 1.0)
+        fit = sj.where(use_norm, C * fit / safe_f_max, fit)
         fit = _finite_like(fit)
         return cast(jax.Array, fit + bias[i])
 
