@@ -223,7 +223,7 @@ def f5(
         Function value(s).
     """
     diff = R @ (x - x_opt)
-    return jnp.max(jnp.abs(diff)) + f_opt
+    return cast(jax.Array, sj.max_st(sj.abs_st(diff)) + f_opt)
 
 
 def f6(
@@ -584,6 +584,7 @@ def _elliptic_base(z: jax.Array) -> jax.Array:
 
 
 def _sphere_base(z: jax.Array) -> jax.Array:
+    """Sphere function for composition use."""
     return jnp.sum(z**2)
 
 
@@ -636,6 +637,7 @@ def _sphere_noisy_base(z: jax.Array, key: jax.Array) -> jax.Array:
 
 
 def _composition_bias() -> jax.Array:
+    """Return standard composition bias vector [0, 100, ..., 900]."""
     return jnp.array(
         [
             0.0,
@@ -677,6 +679,7 @@ def f15(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _f_max: jax.Array | None = None,
 ) -> jax.Array:
     """Hybrid Composition Function 1 (F15).
 
@@ -698,6 +701,9 @@ def f15(
         Rotation matrix stack (overridden with identity).
     Q : jax.Array
         Unused.
+    _f_max : jax.Array, optional
+        Precomputed reference normalization values for composition
+        components, of shape (num_components,).
 
     Returns
     -------
@@ -723,7 +729,12 @@ def f15(
     )
     bias = _composition_bias()
     eye = jnp.stack([jnp.eye(ndim)] * 10)
-    return hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, eye) + f_opt
+    return (
+        hybrid_composition(
+            x, fns, sigma, lambda_, bias, x_opt, eye, _f_max=_f_max
+        )
+        + f_opt
+    )
 
 
 def f16(
@@ -732,6 +743,7 @@ def f16(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _f_max: jax.Array | None = None,
 ) -> jax.Array:
     """Rotated Hybrid Composition Function 1 (F16).
 
@@ -752,6 +764,9 @@ def f16(
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
         Unused.
+    _f_max : jax.Array, optional
+        Precomputed reference normalization values for composition
+        components, of shape (num_components,).
 
     Returns
     -------
@@ -775,7 +790,12 @@ def f16(
         ]
     )
     bias = _composition_bias()
-    return hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R) + f_opt
+    return (
+        hybrid_composition(
+            x, fns, sigma, lambda_, bias, x_opt, R, _f_max=_f_max
+        )
+        + f_opt
+    )
 
 
 def f17(
@@ -785,6 +805,7 @@ def f17(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _f_max: jax.Array | None = None,
 ) -> jax.Array:
     """Rotated Hybrid Composition Function 1 with Noise (F17).
 
@@ -808,13 +829,16 @@ def f17(
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
         Unused.
+    _f_max : jax.Array, optional
+        Precomputed reference normalization values for composition
+        components, of shape (num_components,).
 
     Returns
     -------
     jax.Array
         Function value(s).
     """
-    base = f16(x, x_opt, f_opt, R, Q) - f_opt
+    base = f16(x, x_opt, f_opt, R, Q, _f_max=_f_max) - f_opt
     return base * (1 + 0.4 * jnp.abs(jr.normal(key, shape=()))) + f_opt
 
 
@@ -840,6 +864,7 @@ def f18(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _f_max: jax.Array | None = None,
 ) -> jax.Array:
     """Rotated Hybrid Composition Function 2 (F18).
 
@@ -861,6 +886,9 @@ def f18(
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
         Unused.
+    _f_max : jax.Array, optional
+        Precomputed reference normalization values for composition
+        components, of shape (num_components,).
 
     Returns
     -------
@@ -897,7 +925,12 @@ def f18(
         ]
     )
     bias = _composition_bias()
-    return hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R) + f_opt
+    return (
+        hybrid_composition(
+            x, fns, sigma, lambda_, bias, x_opt, R, _f_max=_f_max
+        )
+        + f_opt
+    )
 
 
 def f19(
@@ -906,6 +939,7 @@ def f19(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _f_max: jax.Array | None = None,
 ) -> jax.Array:
     """Rotated Hybrid Composition Function 2, Narrow Basin (F19).
 
@@ -927,6 +961,9 @@ def f19(
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
         Unused.
+    _f_max : jax.Array, optional
+        Precomputed reference normalization values for composition
+        components, of shape (num_components,).
 
     Returns
     -------
@@ -963,7 +1000,12 @@ def f19(
         ]
     )
     bias = _composition_bias()
-    return hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R) + f_opt
+    return (
+        hybrid_composition(
+            x, fns, sigma, lambda_, bias, x_opt, R, _f_max=_f_max
+        )
+        + f_opt
+    )
 
 
 def f20(
@@ -972,6 +1014,7 @@ def f20(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _f_max: jax.Array | None = None,
 ) -> jax.Array:
     """Hybrid Composition 2 with Global Optimum on Bounds (F20).
 
@@ -993,13 +1036,16 @@ def f20(
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
         Unused.
+    _f_max : jax.Array, optional
+        Precomputed reference normalization values for composition
+        components, of shape (num_components,).
 
     Returns
     -------
     jax.Array
         Function value(s).
     """
-    return f18(x, x_opt, f_opt, R, Q)
+    return f18(x, x_opt, f_opt, R, Q, _f_max=_f_max)
 
 
 def _composition3_fns() -> list:
@@ -1040,6 +1086,7 @@ def f21(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _f_max: jax.Array | None = None,
 ) -> jax.Array:
     """Rotated Hybrid Composition Function 3 (F21).
 
@@ -1061,6 +1108,9 @@ def f21(
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
         Unused.
+    _f_max : jax.Array, optional
+        Precomputed reference normalization values for composition
+        components, of shape (num_components,).
 
     Returns
     -------
@@ -1097,7 +1147,12 @@ def f21(
         ]
     )
     bias = _composition_bias()
-    return hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R) + f_opt
+    return (
+        hybrid_composition(
+            x, fns, sigma, lambda_, bias, x_opt, R, _f_max=_f_max
+        )
+        + f_opt
+    )
 
 
 def f22(
@@ -1106,6 +1161,7 @@ def f22(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _f_max: jax.Array | None = None,
 ) -> jax.Array:
     """Rotated Hybrid Composition 3, High Condition Number (F22).
 
@@ -1127,6 +1183,9 @@ def f22(
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
         Unused.
+    _f_max : jax.Array, optional
+        Precomputed reference normalization values for composition
+        components, of shape (num_components,).
 
     Returns
     -------
@@ -1163,7 +1222,12 @@ def f22(
         ]
     )
     bias = _composition_bias()
-    return hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R) + f_opt
+    return (
+        hybrid_composition(
+            x, fns, sigma, lambda_, bias, x_opt, R, _f_max=_f_max
+        )
+        + f_opt
+    )
 
 
 def f23(
@@ -1172,15 +1236,19 @@ def f23(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _f_max: jax.Array | None = None,
 ) -> jax.Array:
     """Non-Continuous Rotated Hybrid Composition Function 3 (F23).
 
     Same as F21 but with soft rounding applied to x before
     evaluation. Uses ``softjax`` for ``jax.grad`` compatibility.
 
-    Note: The soft rounding approximation shifts the effective minimum
-    away from the theoretical optimum. At ``x_opt``, the function value
-    differs from ``f_opt`` by ~1e-2 across all tested dimensions.
+    Notes
+    -----
+    The soft rounding approximation shifts the effective
+    minimum away from the theoretical optimum. At ``x_opt``,
+    the function value differs from ``f_opt`` by ~1e-2
+    across all tested dimensions.
 
     ![F23 3D surface](img/3d/f23.png){ width=30% }
     ![F23 2D surface](img/2d/f23.png){ width=30% }
@@ -1197,6 +1265,9 @@ def f23(
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
         Unused.
+    _f_max : jax.Array, optional
+        Precomputed reference normalization values for composition
+        components, of shape (num_components,).
 
     Returns
     -------
@@ -1209,7 +1280,7 @@ def f23(
     mask = sj.heaviside(diff)
     x_rounded = sj.round(2.0 * x) / 2.0
     y = mask * x_rounded + (1.0 - mask) * x
-    return f21(y, x_opt, f_opt, R, Q)
+    return f21(y, x_opt, f_opt, R, Q, _f_max=_f_max)
 
 
 def f24(
@@ -1219,6 +1290,7 @@ def f24(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _f_max: jax.Array | None = None,
 ) -> jax.Array:
     """Rotated Hybrid Composition Function 4 (F24).
 
@@ -1245,6 +1317,9 @@ def f24(
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
         Unused.
+    _f_max : jax.Array, optional
+        Precomputed reference normalization values for composition
+        components, of shape (num_components,).
 
     Returns
     -------
@@ -1269,7 +1344,12 @@ def f24(
         ]
     )
     bias = _composition_bias()
-    return hybrid_composition(x, fns, sigma, lambda_, bias, x_opt, R) + f_opt
+    return (
+        hybrid_composition(
+            x, fns, sigma, lambda_, bias, x_opt, R, _f_max=_f_max
+        )
+        + f_opt
+    )
 
 
 def f25(
@@ -1279,6 +1359,7 @@ def f25(
     f_opt: jax.Array,
     R: jax.Array,
     Q: jax.Array,
+    _f_max: jax.Array | None = None,
 ) -> jax.Array:
     """Rotated Hybrid Composition Function 4 without Bounds (F25).
 
@@ -1303,10 +1384,13 @@ def f25(
         Stack of rotation matrices of shape (10, ndim, ndim).
     Q : jax.Array
         Unused.
+    _f_max : jax.Array, optional
+        Precomputed reference normalization values for composition
+        components, of shape (num_components,).
 
     Returns
     -------
     jax.Array
         Function value(s).
     """
-    return f24(x, key, x_opt, f_opt, R, Q)
+    return f24(x, key, x_opt, f_opt, R, Q, _f_max=_f_max)

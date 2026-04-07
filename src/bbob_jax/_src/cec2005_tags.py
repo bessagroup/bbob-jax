@@ -1,3 +1,10 @@
+"""CEC 2005 function characteristics metadata.
+
+Maps each CEC 2005 function name to a dict with boolean
+flags for unimodal, multimodal, composition, rotated,
+noise, and structure_modified.
+"""
+
 #                                                                       Modules
 # =============================================================================
 

@@ -1,3 +1,9 @@
+"""BBOB function characteristics metadata.
+
+Maps each BBOB function name to a dict with boolean flags
+``separable`` and ``unimodal``.
+"""
+
 from collections import defaultdict
 
 function_characteristics = defaultdict(

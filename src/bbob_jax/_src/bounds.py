@@ -1,3 +1,5 @@
+"""Search-space bounds for BBOB and CEC 2005 benchmarks."""
+
 #                                                                       Modules
 # =============================================================================
 
