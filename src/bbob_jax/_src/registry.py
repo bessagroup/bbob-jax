@@ -129,7 +129,7 @@ def _conditioned_linear_transform(
     u = jr.uniform(key_u, shape=(dim,), minval=0.0, maxval=1.0)
     span = jnp.maximum(jnp.max(u) - jnp.min(u), 1e-12)
     exponents = (u - jnp.min(u)) / span
-    n = jnp.diag(jnp.asarray(condition_number, dtype=jnp.float32) ** exponents)
+    n = jnp.diag(jnp.asarray(condition_number, dtype=jnp.float_) ** exponents)
     return p @ n @ q
 
 
@@ -172,10 +172,10 @@ def _sample_nonsingular_integer_matrix(
     attempt_keys = jr.split(key, 32)
     fallback = jr.randint(
         attempt_keys[0], (ndim, ndim), minval, maxval + 1
-    ).astype(jnp.float32)
+    ).astype(jnp.float_)
     for attempt_key in attempt_keys:
         mat = jr.randint(attempt_key, (ndim, ndim), minval, maxval + 1).astype(
-            jnp.float32
+            jnp.float_
         )
         if not jnp.isclose(jnp.linalg.det(mat), 0.0):
             return mat
@@ -295,7 +295,7 @@ def _make_linear_slope(fn: Callable, ndim: int, key: PRNGKeyArray) -> BBOBFn:
     rng = jr.key(0)
     rng = jr.fold_in(rng, kw["Q"][0, 0])
     ls_x_opt = 5 * bernoulli_vector(ndim, rng)
-    i = jnp.arange(1, ndim + 1, dtype=jnp.float32)
+    i = jnp.arange(1, ndim + 1, dtype=jnp.float_)
     ls_s = jnp.sign(ls_x_opt) * jnp.power(10.0, (i - 1) / (ndim - 1))
     return Partial(fn, **kw, _ls_x_opt=ls_x_opt, _ls_s=ls_s), f_opt_val
 
@@ -309,7 +309,7 @@ def _make_linear_slope_deterministic(
     rng = jr.key(0)
     rng = jr.fold_in(rng, kw["Q"][0, 0])
     ls_x_opt = 5 * bernoulli_vector(ndim, rng)
-    i = jnp.arange(1, ndim + 1, dtype=jnp.float32)
+    i = jnp.arange(1, ndim + 1, dtype=jnp.float_)
     ls_s = jnp.sign(ls_x_opt) * jnp.power(10.0, (i - 1) / (ndim - 1))
     return Partial(fn, **kw, _ls_x_opt=ls_x_opt, _ls_s=ls_s), f_opt_val
 
@@ -757,7 +757,7 @@ def make_randomized_cec2005_conditioned(
             ndim, r_key, float(jnp.asarray(condition_numbers))
         )
     else:
-        conds = jnp.asarray(condition_numbers, dtype=jnp.float32)
+        conds = jnp.asarray(condition_numbers, dtype=jnp.float_)
         r_keys = jr.split(r_key, num_components)
         r = _conditioned_transform_stack(ndim, r_keys, conds)
     return Partial(fn, x_opt=x_opt, f_opt=f_opt_val, R=r, Q=q), f_opt_val
@@ -861,9 +861,9 @@ def _make_randomized_cec2005_f12(
     keys = jr.split(key, total_keys)
     x_opt = xopt(key=keys[-2], ndim=ndim, minval=-math.pi, maxval=math.pi)
     # A and B matrices: integer-valued in [-100, 100]
-    R = jr.randint(keys[0], (ndim, ndim), -100, 101).astype(jnp.float32)
+    R = jr.randint(keys[0], (ndim, ndim), -100, 101).astype(jnp.float_)
     Q = jr.randint(keys[num_components], (ndim, ndim), -100, 101).astype(
-        jnp.float32
+        jnp.float_
     )
     f_opt_val = fopt(keys[-1])
     return Partial(fn, x_opt=x_opt, f_opt=f_opt_val, R=R, Q=Q), f_opt_val
@@ -900,7 +900,7 @@ def _make_randomized_cec2005_conditioned_single(
         num_components=1,
         minval=minval,
         maxval=maxval,
-        condition_numbers=jnp.array(condition_number, dtype=jnp.float32),
+        condition_numbers=jnp.array(condition_number, dtype=jnp.float_),
     )
 
 
@@ -911,7 +911,7 @@ def _make_randomized_cec2005_f18_family(
     num_components: int = 10,
 ) -> BBOBFn:
     """Factory for F18/F19/F20 with paper condition numbers and o10=0."""
-    conds = jnp.array([2, 3, 2, 3, 2, 3, 20, 30, 200, 300], dtype=jnp.float32)
+    conds = jnp.array([2, 3, 2, 3, 2, 3, 20, 30, 200, 300], dtype=jnp.float_)
     partial_fn, f_opt_val = make_randomized_cec2005_conditioned(
         fn,
         ndim,
@@ -1134,7 +1134,7 @@ cec2005_registry: dict[str, Callable] = {
         num_components=_NC,
         minval=-5.0,
         maxval=5.0,
-        condition_numbers=jnp.full((_NC,), 2.0, dtype=jnp.float32),
+        condition_numbers=jnp.full((_NC,), 2.0, dtype=jnp.float_),
     ),
     "f17": Partial(
         _add_f_max,
@@ -1179,7 +1179,7 @@ cec2005_registry: dict[str, Callable] = {
         num_components=_NC,
         minval=-5.0,
         maxval=5.0,
-        condition_numbers=jnp.ones((_NC,), dtype=jnp.float32),
+        condition_numbers=jnp.ones((_NC,), dtype=jnp.float_),
     ),
     "f22": Partial(
         _add_f_max,
@@ -1192,7 +1192,7 @@ cec2005_registry: dict[str, Callable] = {
         maxval=5.0,
         condition_numbers=jnp.array(
             [10, 20, 50, 100, 200, 1000, 2000, 3000, 4000, 5000],
-            dtype=jnp.float32,
+            dtype=jnp.float_,
         ),
     ),
     "f23": Partial(
@@ -1204,7 +1204,7 @@ cec2005_registry: dict[str, Callable] = {
         num_components=_NC,
         minval=-5.0,
         maxval=5.0,
-        condition_numbers=jnp.ones((_NC,), dtype=jnp.float32),
+        condition_numbers=jnp.ones((_NC,), dtype=jnp.float_),
     ),
     "f24": Partial(
         make_randomized_cec2005_conditioned,
@@ -1213,7 +1213,7 @@ cec2005_registry: dict[str, Callable] = {
         minval=-5.0,
         maxval=5.0,
         condition_numbers=jnp.array(
-            [100, 50, 30, 10, 5, 5, 4, 3, 2, 2], dtype=jnp.float32
+            [100, 50, 30, 10, 5, 5, 4, 3, 2, 2], dtype=jnp.float_
         ),
     ),
     "f25": Partial(
@@ -1223,7 +1223,7 @@ cec2005_registry: dict[str, Callable] = {
         minval=-5.0,
         maxval=5.0,
         condition_numbers=jnp.array(
-            [100, 50, 30, 10, 5, 5, 4, 3, 2, 2], dtype=jnp.float32
+            [100, 50, 30, 10, 5, 5, 4, 3, 2, 2], dtype=jnp.float_
         ),
     ),
 }
