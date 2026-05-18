@@ -141,7 +141,7 @@ def f3(
     """
     ndim = x.shape[-1]
     z = R @ (x - x_opt)
-    exponents = jnp.arange(ndim, dtype=jnp.float32) / jnp.maximum(ndim - 1, 1)
+    exponents = jnp.arange(ndim, dtype=jnp.float_) / jnp.maximum(ndim - 1, 1)
     coeffs = 10.0 ** (6.0 * exponents)
     return jnp.sum(coeffs * z**2) + f_opt
 
@@ -578,7 +578,7 @@ def _rastrigin_base(z: jax.Array) -> jax.Array:
 def _elliptic_base(z: jax.Array) -> jax.Array:
     """High conditioned elliptic for composition use."""
     ndim = z.shape[-1]
-    exponents = jnp.arange(ndim, dtype=jnp.float32) / jnp.maximum(ndim - 1, 1)
+    exponents = jnp.arange(ndim, dtype=jnp.float_) / jnp.maximum(ndim - 1, 1)
     coeffs = 10.0 ** (6.0 * exponents)
     return jnp.sum(coeffs * z**2)
 
