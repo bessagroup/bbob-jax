@@ -96,7 +96,7 @@ def tasy_func(x: jax.Array, beta: float = 0.5) -> jax.Array:
 
 def lambda_func(size: int, alpha: float | jax.Array = 10.0) -> jax.Array:
     """Diagonal conditioning matrix (Lambda) from the BBOB suite."""
-    idx = jnp.arange(size, dtype=jnp.float_)
+    idx = jnp.arange(size, dtype=float)
     diagonal = alpha ** (idx / (2 * (size - 1)))
     return jnp.diag(diagonal)
 
@@ -156,7 +156,7 @@ def bernoulli_vector(dim: int, key: jax.Array) -> jax.Array:
     jax.Array
         Vector of shape ``(dim,)`` with entries in {-1, 1}.
     """
-    return jr.bernoulli(key, p=0.5, shape=(dim,)).astype(jnp.float_) * 2 - 1
+    return jr.bernoulli(key, p=0.5, shape=(dim,)).astype(float) * 2 - 1
 
 
 def _create_mesh(
@@ -277,7 +277,7 @@ def cec2005_weierstrass(x: jax.Array) -> jax.Array:
         Scalar function value.
     """
     a, b = 0.5, 3.0
-    k = jnp.arange(0, 21, dtype=jnp.float_)
+    k = jnp.arange(0, 21, dtype=float)
     ak = a**k  # (21,)
     bk = b**k  # (21,)
     # x: (ndim,), expand to (ndim, 1); k: (21,) → broadcast to (ndim, 21)

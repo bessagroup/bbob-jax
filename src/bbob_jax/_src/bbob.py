@@ -1088,8 +1088,8 @@ def _precompute_gallagher(
     key = jr.fold_in(key, Q[0, 0])
     key1, key2 = jr.split(key)
 
-    i = jnp.arange(1, num_peaks + 1, dtype=jnp.float_)
-    j = jnp.arange(0, num_peaks - 1, dtype=jnp.float_)
+    i = jnp.arange(1, num_peaks + 1, dtype=float)
+    j = jnp.arange(0, num_peaks - 1, dtype=float)
 
     w = 1.1 + 8.0 * ((i - 2) / w_divisor)
     w = w.at[0].set(10.0)
@@ -1106,7 +1106,7 @@ def _precompute_gallagher(
     # Compute diagonal vectors instead of full (ndim x ndim) matrices.
     # lambda_func(ndim, alpha_i) = diag(alpha_i^(idx / (2*(ndim-1))))
     # Then divided by alpha_i^0.25.
-    idx = jnp.arange(ndim, dtype=jnp.float_)
+    idx = jnp.arange(ndim, dtype=float)
     # alpha: (num_peaks,), idx: (ndim,) -> c_diags: (num_peaks, ndim)
     c_diags = jnp.power(
         alpha[:, None], idx[None, :] / (2 * (ndim - 1))
@@ -1296,7 +1296,7 @@ def katsuura(
         _mat = Q @ lambda_func(ndim, alpha=100.0) @ R
     z = _mat @ (x - x_opt)
 
-    J = 2.0 ** jnp.arange(1, 33, dtype=jnp.float_)  # (32,)
+    J = 2.0 ** jnp.arange(1, 33, dtype=float)  # (32,)
     # jsum term: shape (32, dim)
     z_expanded = z[None, :]  # (1, dim)
     J_expanded = J[:, None]  # (32, 1)
