@@ -11,7 +11,7 @@ produce a callable benchmark function.
 
 # Standard
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any, cast
 
 # Third-Party
@@ -129,7 +129,7 @@ def _conditioned_linear_transform(
     u = jr.uniform(key_u, shape=(dim,), minval=0.0, maxval=1.0)
     span = jnp.maximum(jnp.max(u) - jnp.min(u), 1e-12)
     exponents = (u - jnp.min(u)) / span
-    n = jnp.diag(jnp.asarray(condition_number, dtype=jnp.float_) ** exponents)
+    n = jnp.diag(jnp.asarray(condition_number, dtype=float) ** exponents)
     return p @ n @ q
 
 
@@ -172,10 +172,10 @@ def _sample_nonsingular_integer_matrix(
     attempt_keys = jr.split(key, 32)
     fallback = jr.randint(
         attempt_keys[0], (ndim, ndim), minval, maxval + 1
-    ).astype(jnp.float_)
+    ).astype(float)
     for attempt_key in attempt_keys:
         mat = jr.randint(attempt_key, (ndim, ndim), minval, maxval + 1).astype(
-            jnp.float_
+            float
         )
         if not jnp.isclose(jnp.linalg.det(mat), 0.0):
             return mat
@@ -295,7 +295,7 @@ def _make_linear_slope(fn: Callable, ndim: int, key: PRNGKeyArray) -> BBOBFn:
     rng = jr.key(0)
     rng = jr.fold_in(rng, kw["Q"][0, 0])
     ls_x_opt = 5 * bernoulli_vector(ndim, rng)
-    i = jnp.arange(1, ndim + 1, dtype=jnp.float_)
+    i = jnp.arange(1, ndim + 1, dtype=float)
     ls_s = jnp.sign(ls_x_opt) * jnp.power(10.0, (i - 1) / (ndim - 1))
     return Partial(fn, **kw, _ls_x_opt=ls_x_opt, _ls_s=ls_s), f_opt_val
 
@@ -309,7 +309,7 @@ def _make_linear_slope_deterministic(
     rng = jr.key(0)
     rng = jr.fold_in(rng, kw["Q"][0, 0])
     ls_x_opt = 5 * bernoulli_vector(ndim, rng)
-    i = jnp.arange(1, ndim + 1, dtype=jnp.float_)
+    i = jnp.arange(1, ndim + 1, dtype=float)
     ls_s = jnp.sign(ls_x_opt) * jnp.power(10.0, (i - 1) / (ndim - 1))
     return Partial(fn, **kw, _ls_x_opt=ls_x_opt, _ls_s=ls_s), f_opt_val
 
@@ -757,7 +757,7 @@ def make_randomized_cec2005_conditioned(
             ndim, r_key, float(jnp.asarray(condition_numbers))
         )
     else:
-        conds = jnp.asarray(condition_numbers, dtype=jnp.float_)
+        conds = jnp.asarray(condition_numbers, dtype=float)
         r_keys = jr.split(r_key, num_components)
         r = _conditioned_transform_stack(ndim, r_keys, conds)
     return Partial(fn, x_opt=x_opt, f_opt=f_opt_val, R=r, Q=q), f_opt_val
@@ -861,10 +861,8 @@ def _make_randomized_cec2005_f12(
     keys = jr.split(key, total_keys)
     x_opt = xopt(key=keys[-2], ndim=ndim, minval=-math.pi, maxval=math.pi)
     # A and B matrices: integer-valued in [-100, 100]
-    R = jr.randint(keys[0], (ndim, ndim), -100, 101).astype(jnp.float_)
-    Q = jr.randint(keys[num_components], (ndim, ndim), -100, 101).astype(
-        jnp.float_
-    )
+    R = jr.randint(keys[0], (ndim, ndim), -100, 101).astype(float)
+    Q = jr.randint(keys[num_components], (ndim, ndim), -100, 101).astype(float)
     f_opt_val = fopt(keys[-1])
     return Partial(fn, x_opt=x_opt, f_opt=f_opt_val, R=R, Q=Q), f_opt_val
 
@@ -900,7 +898,7 @@ def _make_randomized_cec2005_conditioned_single(
         num_components=1,
         minval=minval,
         maxval=maxval,
-        condition_numbers=jnp.array(condition_number, dtype=jnp.float_),
+        condition_numbers=jnp.array(condition_number, dtype=float),
     )
 
 
@@ -911,7 +909,7 @@ def _make_randomized_cec2005_f18_family(
     num_components: int = 10,
 ) -> BBOBFn:
     """Factory for F18/F19/F20 with paper condition numbers and o10=0."""
-    conds = jnp.array([2, 3, 2, 3, 2, 3, 20, 30, 200, 300], dtype=jnp.float_)
+    conds = jnp.array([2, 3, 2, 3, 2, 3, 20, 30, 200, 300], dtype=float)
     partial_fn, f_opt_val = make_randomized_cec2005_conditioned(
         fn,
         ndim,
@@ -954,89 +952,109 @@ def _make_randomized_cec2005_f20(
 
 _NC = 10  # num_components for all composition functions (F15-F25)
 
-# Lambda arrays shared by composition function groups
-_COMP1_LAMBDA = jnp.array(
-    [1, 1, 10, 10, 5 / 60, 5 / 60, 5 / 32, 5 / 32, 5 / 100, 5 / 100]
+# Lambda values shared by composition function groups. Stored as plain
+# Python tuples (not jnp.array) so that import order does not bake in a
+# dtype before the user has had a chance to call
+# ``jax.config.update("jax_enable_x64", True)``. The factories convert
+# them to jax.Array at call time via ``jnp.asarray(..., dtype=float)``.
+_COMP1_LAMBDA: tuple[float, ...] = (
+    1,
+    1,
+    10,
+    10,
+    5 / 60,
+    5 / 60,
+    5 / 32,
+    5 / 32,
+    5 / 100,
+    5 / 100,
 )
-_COMP2_LAMBDA_F18 = jnp.array(
-    [
-        2 * 5 / 32,
-        5 / 32,
-        2 * 1,
-        1,
-        2 * 5 / 100,
-        5 / 100,
-        2 * 10,
-        10,
-        2 * 5 / 60,
-        5 / 60,
-    ]
+_COMP2_LAMBDA_F18: tuple[float, ...] = (
+    2 * 5 / 32,
+    5 / 32,
+    2 * 1,
+    1,
+    2 * 5 / 100,
+    5 / 100,
+    2 * 10,
+    10,
+    2 * 5 / 60,
+    5 / 60,
 )
-_COMP2_LAMBDA_F19 = jnp.array(
-    [
-        0.1 * 5 / 32,
-        5 / 32,
-        2 * 1,
-        1,
-        2 * 5 / 100,
-        5 / 100,
-        2 * 10,
-        10,
-        2 * 5 / 60,
-        5 / 60,
-    ]
+_COMP2_LAMBDA_F19: tuple[float, ...] = (
+    0.1 * 5 / 32,
+    5 / 32,
+    2 * 1,
+    1,
+    2 * 5 / 100,
+    5 / 100,
+    2 * 10,
+    10,
+    2 * 5 / 60,
+    5 / 60,
 )
-_COMP3_LAMBDA = jnp.array(
-    [
-        5 * 5 / 100,
-        5 / 100,
-        5 * 1,
-        1,
-        5 * 1,
-        1,
-        5 * 10,
-        10,
-        5 * 5 / 200,
-        5 / 200,
-    ]
+_COMP3_LAMBDA: tuple[float, ...] = (
+    5 * 5 / 100,
+    5 / 100,
+    5 * 1,
+    1,
+    5 * 1,
+    1,
+    5 * 10,
+    10,
+    5 * 5 / 200,
+    5 / 200,
 )
 
 
 def _add_f_max(
     base_factory: Callable,
     comp_fns_builder: Callable,
-    comp_lambda: jax.Array,
+    comp_lambda: jax.Array | Sequence[float],
     fn: Callable,
     ndim: int,
     key: PRNGKeyArray,
     **factory_kwargs: Any,
 ) -> BBOBFn:
-    """Wrap any CEC2005 factory to add precomputed _f_max."""
+    """Wrap any CEC2005 factory to add precomputed _f_max.
+
+    ``comp_lambda`` may be a ``jax.Array`` or any sequence of floats;
+    it is converted to ``jax.Array`` at call time so registry entries
+    can store dtype-free Python tuples (see module-level
+    ``_COMP*_LAMBDA``).
+    """
     partial_fn, f_opt_val = base_factory(fn, ndim, key, **factory_kwargs)
     kw = _partial_keywords(partial_fn)
     M = kw["R"]
     # F15 uses identity stacks, but M is already set correctly by the factory
     fns = comp_fns_builder()
-    f_max = compute_composition_f_max(fns, comp_lambda, M, ndim)
+    lambda_arr = jnp.asarray(comp_lambda, dtype=float)
+    f_max = compute_composition_f_max(fns, lambda_arr, M, ndim)
     return Partial(fn, **kw, _f_max=f_max), f_opt_val
 
 
 def _add_f_max_deterministic(
     comp_fns_builder: Callable,
-    comp_lambda: jax.Array,
+    comp_lambda: jax.Array | Sequence[float],
     fn: Callable,
     ndim: int,
     key: PRNGKeyArray | None = None,
     num_components: int = _NC,
 ) -> BBOBFn:
-    """Deterministic factory with precomputed _f_max."""
+    """Deterministic factory with precomputed _f_max.
+
+    ``comp_lambda`` may be a ``jax.Array`` or any sequence of floats;
+    it is converted to ``jax.Array`` at call time so registry entries
+    can store dtype-free Python tuples.
+    """
     partial_fn, f_opt_val = make_deterministic_cec2005(
         fn, ndim, key, num_components
     )
     kw = _partial_keywords(partial_fn)
     M = kw["R"]
     fns = comp_fns_builder()
-    f_max = compute_composition_f_max(fns, comp_lambda, M, ndim)
+    lambda_arr = jnp.asarray(comp_lambda, dtype=float)
+    f_max = compute_composition_f_max(fns, lambda_arr, M, ndim)
     return Partial(fn, **kw, _f_max=f_max), f_opt_val
 
 
@@ -1134,7 +1152,7 @@ cec2005_registry: dict[str, Callable] = {
         num_components=_NC,
         minval=-5.0,
         maxval=5.0,
-        condition_numbers=jnp.full((_NC,), 2.0, dtype=jnp.float_),
+        condition_numbers=(2.0,) * _NC,
     ),
     "f17": Partial(
         _add_f_max,
@@ -1179,7 +1197,7 @@ cec2005_registry: dict[str, Callable] = {
         num_components=_NC,
         minval=-5.0,
         maxval=5.0,
-        condition_numbers=jnp.ones((_NC,), dtype=jnp.float_),
+        condition_numbers=(1.0,) * _NC,
     ),
     "f22": Partial(
         _add_f_max,
@@ -1190,9 +1208,17 @@ cec2005_registry: dict[str, Callable] = {
         num_components=_NC,
         minval=-5.0,
         maxval=5.0,
-        condition_numbers=jnp.array(
-            [10, 20, 50, 100, 200, 1000, 2000, 3000, 4000, 5000],
-            dtype=jnp.float_,
+        condition_numbers=(
+            10.0,
+            20.0,
+            50.0,
+            100.0,
+            200.0,
+            1000.0,
+            2000.0,
+            3000.0,
+            4000.0,
+            5000.0,
         ),
     ),
     "f23": Partial(
@@ -1204,7 +1230,7 @@ cec2005_registry: dict[str, Callable] = {
         num_components=_NC,
         minval=-5.0,
         maxval=5.0,
-        condition_numbers=jnp.ones((_NC,), dtype=jnp.float_),
+        condition_numbers=(1.0,) * _NC,
     ),
     "f24": Partial(
         make_randomized_cec2005_conditioned,
@@ -1212,8 +1238,17 @@ cec2005_registry: dict[str, Callable] = {
         num_components=_NC,
         minval=-5.0,
         maxval=5.0,
-        condition_numbers=jnp.array(
-            [100, 50, 30, 10, 5, 5, 4, 3, 2, 2], dtype=jnp.float_
+        condition_numbers=(
+            100.0,
+            50.0,
+            30.0,
+            10.0,
+            5.0,
+            5.0,
+            4.0,
+            3.0,
+            2.0,
+            2.0,
         ),
     ),
     "f25": Partial(
@@ -1222,8 +1257,17 @@ cec2005_registry: dict[str, Callable] = {
         num_components=_NC,
         minval=-5.0,
         maxval=5.0,
-        condition_numbers=jnp.array(
-            [100, 50, 30, 10, 5, 5, 4, 3, 2, 2], dtype=jnp.float_
+        condition_numbers=(
+            100.0,
+            50.0,
+            30.0,
+            10.0,
+            5.0,
+            5.0,
+            4.0,
+            3.0,
+            2.0,
+            2.0,
         ),
     ),
 }
