@@ -420,8 +420,9 @@ def _make_gallagher_randomized(
     """Randomized factory for Gallagher peak functions."""
     partial_fn, f_opt_val = make_randomized(fn, ndim, key)
     kw = _partial_keywords(partial_fn)
-    w, y, c_diags = _precompute_gallagher(
+    w, y_rot, c_diags = _precompute_gallagher(
         kw["x_opt"],
+        kw["R"],
         kw["Q"],
         ndim,
         num_peaks,
@@ -437,7 +438,7 @@ def _make_gallagher_randomized(
         R=kw["R"],
         Q=kw["Q"],
         _gal_w=w,
-        _gal_y=y,
+        _gal_y_rot=y_rot,
         _gal_c_diags=c_diags,
     ), f_opt_val
 
@@ -455,8 +456,9 @@ def _make_gallagher_deterministic(
     """Deterministic factory for Gallagher peak functions."""
     partial_fn, f_opt_val = make_determinstic(fn, ndim)
     kw = _partial_keywords(partial_fn)
-    w, y, c_diags = _precompute_gallagher(
+    w, y_rot, c_diags = _precompute_gallagher(
         kw["x_opt"],
+        kw["R"],
         kw["Q"],
         ndim,
         num_peaks,
@@ -472,7 +474,7 @@ def _make_gallagher_deterministic(
         R=kw["R"],
         Q=kw["Q"],
         _gal_w=w,
-        _gal_y=y,
+        _gal_y_rot=y_rot,
         _gal_c_diags=c_diags,
     ), f_opt_val
 

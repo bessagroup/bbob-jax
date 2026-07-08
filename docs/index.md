@@ -52,7 +52,7 @@ The BBOB and CEC 2005 benchmark suites are cornerstones of black-box optimizatio
 
 ## Gradient-friendly implementations
 
-Many BBOB functions use non-smooth operations (`abs`, `sign`, `sqrt`, `max`, `min`) that produce zero, undefined, or infinite gradients at certain points. This library uses [softjax](https://github.com/mvanderSchelling/softjax) straight-through estimators to provide well-defined gradients everywhere while keeping the forward pass *exactly* equal to the original function definitions.
+Many BBOB functions use non-smooth operations (`abs`, `sign`, `sqrt`) that produce zero, undefined, or infinite gradients at certain points. This library uses [softjax](https://github.com/mvanderSchelling/softjax) straight-through estimators to provide well-defined gradients everywhere while keeping the forward pass *exactly* equal to the original function definitions.
 
 For example, `jnp.abs(x)` has a zero gradient at `x = 0` and `jnp.sqrt(x)` has an infinite gradient at `x = 0`. The softjax replacements (`sj.abs_st`, `sj.sqrt`) return the exact same values but route gradients through smooth approximations during the backward pass. This means `jax.grad` produces useful, finite gradients without any loss of benchmark fidelity.
 
@@ -65,8 +65,8 @@ The following operations are replaced:
 | `jnp.sqrt` | `sj.sqrt` | F3, F12, F13, F15, F17, F18, F20 |
 | `jnp.maximum(., 0)` | `sj.relu_st` | F4, F7, F16–F18, F20–F24 (via `penalty`) |
 | `jnp.where` / `>` | `sj.where` / `sj.greater_st` | F3, F6, F12, F15, F17, F18 |
-| `jnp.max` | `sj.max_st` | F21, F22 |
-| `jnp.minimum` | `sj.min_st` | F24 |
+
+softjax is used only where JAX's own gradient is degenerate (zero, undefined, or infinite). Operations with well-defined subgradients — in particular the `max`/`min` reductions in F21, F22, F24 — use plain `jnp.max`/`jnp.min`: their gradient flows through the selected element, which is the meaningful descent direction, and the straight-through soft-sort would otherwise run in every forward pass (the soft branch of `stop_gradient(hard - soft) + soft` cannot be dead-code-eliminated).
 
 Functions that are *intentionally* non-smooth (F7 `step_ellipsoid`, F23 `katsuura`) are left unchanged — smoothing them would defeat their benchmarking purpose.
 

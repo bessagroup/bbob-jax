@@ -1061,6 +1061,7 @@ def schwefel_xsinx(
 
 def _precompute_gallagher(
     x_opt: jax.Array,
+    R: jax.Array,
     Q: jax.Array,
     ndim: int,
     num_peaks: int,
@@ -1069,12 +1070,20 @@ def _precompute_gallagher(
     y_minval: float,
     y_maxval: float,
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
-    """Precompute Gallagher peak weights and locations.
+    """Precompute Gallagher peak weights and rotated locations.
+
+    Since the same rotation ``R`` applies to every peak difference,
+    ``R @ (x - y_i) == R @ x - R @ y_i``: rotating the peak locations
+    once here lets the evaluation rotate only ``x`` (one ndim^2
+    matvec) instead of all ``num_peaks`` differences
+    (num_peaks * ndim^2).
 
     Parameters
     ----------
     x_opt : jax.Array
         Optimal point for the first peak.
+    R : jax.Array
+        Rotation matrix applied to the peak differences.
     Q : jax.Array
         Rotation matrix (used to seed the RNG).
     ndim : int
@@ -1093,8 +1102,8 @@ def _precompute_gallagher(
     Returns
     -------
     tuple[jax.Array, jax.Array, jax.Array]
-        Peak weights, peak locations, and conditioning
-        diagonal vectors.
+        Peak weights, rotated peak locations (``y @ R.T``), and
+        conditioning diagonal vectors.
     """
     key = jr.key(0)
     key = jr.fold_in(key, Q[0, 0])
@@ -1114,6 +1123,7 @@ def _precompute_gallagher(
         key2, shape=(num_peaks, ndim), minval=y_minval, maxval=y_maxval
     )
     y = y.at[0].set(x_opt)
+    y_rot = y @ R.T
 
     # Compute diagonal vectors instead of full (ndim x ndim) matrices.
     # lambda_func(ndim, alpha_i) = diag(alpha_i^(idx / (2*(ndim-1))))
@@ -1124,7 +1134,7 @@ def _precompute_gallagher(
         alpha[:, None], idx[None, :] / (2 * (ndim - 1))
     ) / jnp.power(alpha[:, None], 0.25)
 
-    return w, y, c_diags
+    return w, y_rot, c_diags
 
 
 def gallagher_101_peaks(
@@ -1134,7 +1144,7 @@ def gallagher_101_peaks(
     R: jax.Array,
     Q: jax.Array,
     _gal_w: jax.Array | None = None,
-    _gal_y: jax.Array | None = None,
+    _gal_y_rot: jax.Array | None = None,
     _gal_c_diags: jax.Array | None = None,
 ) -> jax.Array:
     """Gallagher 101 peaks function (F21).
@@ -1160,8 +1170,9 @@ def gallagher_101_peaks(
         Second rotation matrix.
     _gal_w : jax.Array, optional
         Precomputed peak weight vector of shape (101,).
-    _gal_y : jax.Array, optional
-        Precomputed peak location matrix of shape (101, ndim).
+    _gal_y_rot : jax.Array, optional
+        Precomputed rotated peak location matrix ``y @ R.T`` of shape
+        (101, ndim).
     _gal_c_diags : jax.Array, optional
         Precomputed conditioning diagonal vectors of shape (101, ndim).
 
@@ -1173,22 +1184,23 @@ def gallagher_101_peaks(
     ndim = x.shape[-1]
 
     if _gal_w is None:
-        w, y, c_diags = _precompute_gallagher(
-            x_opt, Q, ndim, 101, 99, 1000.0, -5.0, 5.0
+        w, y_rot, c_diags = _precompute_gallagher(
+            x_opt, R, Q, ndim, 101, 99, 1000.0, -5.0, 5.0
         )
     else:
-        assert _gal_y is not None
+        assert _gal_y_rot is not None
         assert _gal_c_diags is not None
-        w, y, c_diags = _gal_w, _gal_y, _gal_c_diags
+        w, y_rot, c_diags = _gal_w, _gal_y_rot, _gal_c_diags
 
-    diff = x[None, :] - y  # (101, ndim)
-    rotated_diff = jnp.einsum("ij,...j->...i", R, diff)  # (101, ndim)
+    # R @ (x - y_i) == R @ x - (y @ R.T)_i: rotate x once instead of
+    # all 101 differences.
+    rotated_diff = R @ x - y_rot  # (101, ndim)
     exponents = -(1.0 / (2.0 * ndim)) * jnp.sum(
         c_diags * rotated_diff**2, axis=-1
     )  # (101,)
     inside_max = w * jnp.exp(exponents)  # (101,)
 
-    f = 10.0 - sj.max_st(inside_max, axis=0)
+    f = 10.0 - jnp.max(inside_max, axis=0)
 
     f_tosz = tosz_func(jnp.array([f]))[0]
 
@@ -1204,7 +1216,7 @@ def gallagher_21_peaks(
     R: jax.Array,
     Q: jax.Array,
     _gal_w: jax.Array | None = None,
-    _gal_y: jax.Array | None = None,
+    _gal_y_rot: jax.Array | None = None,
     _gal_c_diags: jax.Array | None = None,
 ) -> jax.Array:
     """Gallagher 21 peaks function (F22).
@@ -1230,8 +1242,9 @@ def gallagher_21_peaks(
         Second rotation matrix.
     _gal_w : jax.Array, optional
         Precomputed peak weight vector of shape (21,).
-    _gal_y : jax.Array, optional
-        Precomputed peak location matrix of shape (21, ndim).
+    _gal_y_rot : jax.Array, optional
+        Precomputed rotated peak location matrix ``y @ R.T`` of shape
+        (21, ndim).
     _gal_c_diags : jax.Array, optional
         Precomputed conditioning diagonal vectors of shape (21, ndim).
 
@@ -1243,22 +1256,23 @@ def gallagher_21_peaks(
     ndim = x.shape[-1]
 
     if _gal_w is None:
-        w, y, c_diags = _precompute_gallagher(
-            x_opt, Q, ndim, 21, 19, 1000.0**2, -4.9, 4.9
+        w, y_rot, c_diags = _precompute_gallagher(
+            x_opt, R, Q, ndim, 21, 19, 1000.0**2, -4.9, 4.9
         )
     else:
-        assert _gal_y is not None
+        assert _gal_y_rot is not None
         assert _gal_c_diags is not None
-        w, y, c_diags = _gal_w, _gal_y, _gal_c_diags
+        w, y_rot, c_diags = _gal_w, _gal_y_rot, _gal_c_diags
 
-    diff = x[None, :] - y  # (21, ndim)
-    rotated_diff = jnp.einsum("ij,...j->...i", R, diff)  # (21, ndim)
+    # R @ (x - y_i) == R @ x - (y @ R.T)_i: rotate x once instead of
+    # all 21 differences.
+    rotated_diff = R @ x - y_rot  # (21, ndim)
     exponents = -(1.0 / (2.0 * ndim)) * jnp.sum(
         c_diags * rotated_diff**2, axis=-1
     )  # (21,)
     inside_max = w * jnp.exp(exponents)  # (21,)
 
-    f = 10.0 - sj.max_st(inside_max, axis=0)
+    f = 10.0 - jnp.max(inside_max, axis=0)
 
     f_tosz = tosz_func(jnp.array([f]))[0]
 
@@ -1398,7 +1412,7 @@ def lunacek_bi_rastrigin(
 
     z = _mat @ (x_hat - mu0 * jnp.ones_like(x))
 
-    term1 = sj.min_st(
+    term1 = jnp.min(
         jnp.stack(
             [
                 jnp.sum(jnp.power(x_hat - mu0, 2)),
