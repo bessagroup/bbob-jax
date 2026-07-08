@@ -223,7 +223,7 @@ def f5(
         Function value(s).
     """
     diff = R @ (x - x_opt)
-    return cast(jax.Array, sj.max_st(sj.abs_st(diff)) + f_opt)
+    return cast(jax.Array, jnp.max(sj.abs_st(diff)) + f_opt)
 
 
 def f6(
