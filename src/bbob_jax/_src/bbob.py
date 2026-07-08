@@ -226,6 +226,13 @@ def linear_slope(
     ![Linear slope function 3D surface](img/3d/linear_slope.png){ width=30% }
     ![Linear slope function 2D surface](img/2d/linear_slope.png){ width=30% }
 
+    Note
+    ----
+    NaN inputs propagate to the output. The internal ``jnp.where`` that
+    clamps coordinates at the boundary would otherwise mask NaN (since
+    ``NaN < 25.0`` is False, selecting the finite ``x_opt`` branch), so NaN
+    is re-injected element-wise to stay consistent with the other functions.
+
     Parameters
     ----------
     x : jax.Array
@@ -260,6 +267,11 @@ def linear_slope(
 
     cond = _ls_x_opt * x < 25.0
     z = jnp.where(cond, x, _ls_x_opt)
+    # `jnp.where` drops NaN inputs: `NaN < 25.0` is False, so it selects the
+    # finite x_opt branch and silently clamps invalid inputs to the boundary.
+    # Re-inject NaN element-wise so invalid inputs propagate, matching the
+    # other 23 BBOB functions.
+    z = jnp.where(jnp.isnan(x), x, z)
 
     result = jnp.sum(5.0 * jnp.abs(_ls_s) - _ls_s * z)
     return result + f_opt

@@ -56,6 +56,8 @@ Functions compose transformations from `_src/utils.py`:
 - Apply `lambda_func` (diagonal conditioning)
 - Add boundary `penalty` and offset by `f_opt`
 
+Gradient convention: softjax (`sj.*`) straight-through estimators are used only where JAX's own gradient is degenerate (zero, undefined, or infinite — e.g. `sign`, `round`, `abs`, `sqrt` at 0). Operations with well-defined subgradients, in particular `max`/`min` reductions, use plain `jnp` — the straight-through soft branch would otherwise execute in every forward pass and inflate grad-compile time (see the Gallagher functions).
+
 ### Module Layout
 
 ```

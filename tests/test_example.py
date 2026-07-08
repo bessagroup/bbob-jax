@@ -63,6 +63,29 @@ def test_function_output_jit(name, fn, dim):
     )
 
 
+@pytest.mark.parametrize("name,fn", all_functions)
+@pytest.mark.parametrize("dim", dimensions)
+def test_function_nan_propagates(name, fn, dim):
+    """NaN inputs must propagate to the output, not be silently masked.
+
+    A function that returns a finite value for a NaN input hides invalid
+    inputs from the caller (regression guard for linear_slope, whose
+    boundary-clamping ``jnp.where`` previously swallowed NaN).
+    """
+    key = jr.key(0)
+    fn_func, _ = fn(ndim=dim, key=key)
+
+    x_all_nan = jnp.full((dim,), jnp.nan)
+    assert jnp.isnan(fn_func(x_all_nan)), (
+        f"Function {name} did not propagate an all-NaN input."
+    )
+
+    x_partial_nan = jnp.zeros((dim,)).at[0].set(jnp.nan)
+    assert jnp.isnan(fn_func(x_partial_nan)), (
+        f"Function {name} did not propagate a single-coordinate NaN input."
+    )
+
+
 @pytest.mark.parametrize("name,fn", pytest_registry)
 @pytest.mark.parametrize("dim", [2])
 @pytest.mark.parametrize("seed", [1, 2])
