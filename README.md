@@ -11,6 +11,10 @@ JAX implementations of the **BBOB** benchmark functions (Finck et al., 2009) [^1
 
 ***
 
+## Summary
+
+`bbob-jax` is a pure-[JAX](https://github.com/jax-ml/jax) reimplementation of two standard black-box optimization benchmark suites: the 24 noise-free **BBOB** functions (Finck et al., 2009) and the 25 **CEC 2005** real-parameter functions (Suganthan et al., 2005). Every function is differentiable, JIT-compilable, and vectorizable via `vmap`, and is exposed through a simple registry that returns a ready-to-call objective together with its global minimum. Both randomized (shifted and rotated) and deterministic factory variants are provided, alongside per-function search-space bounds and metadata.
+
 ## Statement of need
 
 The BBOB and CEC 2005 benchmark suites are cornerstones of black-box optimization research. This repository provides JAX reimplementations of both: the 24 BBOB noise-free functions originally written in C, and the 25 CEC 2005 real-parameter functions. Translating these suites to JAX enables automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance — making them ideal for research in optimization, machine learning, and evolutionary algorithms.
@@ -106,3 +110,15 @@ This project is licensed under the BSD 3-Clause License. See [LICENSE](https://g
 [^3]: Lange, R. T. (2022), evosax: JAX-based Evolution Strategies. arXiv preprint [arXiv:2212.04180](https://arxiv.org/abs/2212.04180).
 
 [^4]: Suganthan, P. N., Hansen, N., Liang, J. J., and Deb, K. (2005), Problem Definitions and Evaluation Criteria for the CEC 2005 Special Session on Real-Parameter Optimization.
+
+## Related repositories
+
+`bbob-jax` provides the benchmark functions used across the L2CO ecosystem developed in the [Bessa Research Group](https://github.com/bessagroup). The repositories below work together:
+
+- [l2co](https://github.com/bessagroup/L2CO) — Learning to Choose Optimizers: a meta-learner that selects an optimizer from problem features before any evaluations, then reassesses that choice from the observed optimization trajectory.
+- [rl2co](https://github.com/bessagroup/rl2co) — Reinforcement Learning to Choose Optimizers: a JAX-based RL agent that dynamically switches between optimizers during a run.
+- [l2co-tasks](https://github.com/bessagroup/l2co-tasks) — Optimization task definitions (BBOB, CEC 2005, PDE, spiral, …) compatible with the L2CO library.
+- [l2co_experiments](https://github.com/bessagroup/l2co_experiments) — Hydra + f3dasm experiment pipelines (dataset creation, training, rollouts, figures) for the L2CO studies.
+- [agentic-l2co](https://github.com/bessagroup/agentic-l2co) — An LLM-agent drop-in replacement for `l2co.L2COModel`, driving two-stage optimizer selection with an Ollama-hosted LLM.
+- [bbob-jax](https://github.com/bessagroup/bbob-jax) — JAX implementations of the BBOB and CEC 2005 black-box optimization benchmark functions.
+- [f3dasm](https://github.com/bessagroup/f3dasm) — Framework for Data-Driven Design and Analysis of Structures and Materials; provides `ExperimentData`, pipelines, and SLURM orchestration.
