@@ -17,8 +17,8 @@ import jax.random as jr
 import softjax as sj
 
 # Local
-from bbob_jax._src.utils import (
-    bernoulli_vector,
+from bbob_jax._src.sampling import bernoulli_vector
+from bbob_jax._src.transforms import (
     lambda_func,
     penalty,
     tasy_func,

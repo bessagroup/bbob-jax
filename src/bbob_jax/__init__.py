@@ -35,6 +35,7 @@ from bbob_jax._src.bbob import (
 )
 from bbob_jax._src.bounds import bbob_bounds, cec2005_bounds
 from bbob_jax._src.cec2005_tags import cec2005_function_characteristics
+from bbob_jax._src.problem import Problem, problem
 from bbob_jax._src.registry import (
     cec2005_registry,
     cec2005_registry_original,
@@ -62,7 +63,8 @@ __all__ = [
     "cec2005_function_characteristics",
     "bbob_bounds",
     "cec2005_bounds",
-    "bbob",
+    "Problem",
+    "problem",
     "attractive_sector",
     "bent_cigar",
     "discuss",

@@ -1,0 +1,887 @@
+"""Single source of truth for every benchmark function.
+
+Each :class:`FunctionSpec` row bundles everything the package
+knows about one function: its implementation, the factory that
+constructs problem instances (randomized or deterministic),
+its metadata tags, its search-space bounds and where its true
+optimum lives. The public registries, tag dicts and bounds
+dicts in ``registry.py``, ``tags.py``, ``cec2005_tags.py`` and
+``bounds.py`` are all derived views of this table — adding a
+function means adding its implementation and one row here.
+"""
+
+#                                                                       Modules
+# =============================================================================
+
+# Standard
+import math
+from collections.abc import Callable
+from typing import Any, NamedTuple, cast
+
+# Third-party
+import jax
+import jax.numpy as jnp
+from jax.tree_util import Partial
+
+# Local
+from bbob_jax._src.bbob import (
+    attractive_sector,
+    bent_cigar,
+    discuss,
+    ellipsoid,
+    ellipsoid_seperable,
+    gallagher_21_peaks,
+    gallagher_101_peaks,
+    griewank_rosenbrock_f8f2,
+    katsuura,
+    linear_slope,
+    lunacek_bi_rastrigin,
+    rastrigin,
+    rastrigin_seperable,
+    rosenbrock,
+    rosenbrock_rotated,
+    schaffer_f7_condition_10,
+    schaffer_f7_condition_1000,
+    schwefel_xsinx,
+    sharp_ridge,
+    skew_rastrigin_bueche,
+    sphere,
+    step_ellipsoid,
+    sum_of_different_powers,
+    weierstrass,
+)
+from bbob_jax._src.cec2005 import (
+    _composition1_fns,
+    _composition2_fns,
+    _composition3_fns,
+    f1,
+    f2,
+    f3,
+    f4,
+    f5,
+    f6,
+    f7,
+    f8,
+    f9,
+    f10,
+    f11,
+    f12,
+    f13,
+    f14,
+    f15,
+    f16,
+    f17,
+    f18,
+    f19,
+    f20,
+    f21,
+    f22,
+    f23,
+    f24,
+    f25,
+)
+from bbob_jax._src.factories import (
+    BBOBFn,
+    _add_f_max,
+    _make_cec2005_conditioned_single,
+    _make_cec2005_f5,
+    _make_cec2005_f7,
+    _make_cec2005_f8,
+    _make_cec2005_f12,
+    _make_cec2005_f18_family,
+    _make_cec2005_f20,
+    _make_gallagher,
+    _make_linear_slope,
+    _make_lunacek,
+    _make_schwefel,
+    _make_with_mat,
+    make_bbob,
+    make_cec2005,
+    make_cec2005_conditioned,
+)
+
+#                                                          Authorship & Credits
+# =============================================================================
+__author__ = "Martin van der Schelling (M.P.vanderSchelling@tudelft.nl)"
+__credits__ = ["Martin van der Schelling"]
+__status__ = "Stable"
+# =============================================================================
+
+BBOB_BOUNDS: tuple[float, float] = (-5.0, 5.0)
+
+
+#                                                              x_opt resolvers
+# =============================================================================
+# Given the keyword arguments bound into a constructed Partial, return the
+# input location of the function's global minimum. For most functions this
+# is the sampled ``x_opt``; the resolvers below encode the exceptions.
+
+
+def _default_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
+    """Minimum is at the sampled ``x_opt``."""
+    return cast(jax.Array, kw["x_opt"])
+
+
+def _first_component_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
+    """Compositions: the global minimum is the first component's optimum."""
+    return cast(jax.Array, kw["x_opt"][0])
+
+
+def _linear_slope_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
+    """linear_slope: the minimum is at the boundary point ``_ls_x_opt``."""
+    return cast(jax.Array, kw["_ls_x_opt"])
+
+
+def _rosenbrock_rotated_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
+    """rosenbrock_rotated: minimum offset from ``x_opt`` (see docstring).
+
+    ``z = zmax * ((x - x_opt) @ R) + 0.5`` is 1 at the minimum, so the
+    minimizer is ``x_opt + (0.5 / zmax) * ones @ R.T``. It can fall
+    outside the standard bounds for some rotations.
+    """
+    zmax = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0)
+    return cast(
+        jax.Array, kw["x_opt"] + (0.5 / zmax) * (jnp.ones(ndim) @ kw["R"].T)
+    )
+
+
+def _griewank_rosenbrock_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
+    """griewank_rosenbrock_f8f2: minimum offset from ``x_opt``.
+
+    ``z = zmax * (R @ (x - x_opt)) + 0.5`` is 1 at the minimum, so the
+    minimizer is ``x_opt + (0.5 / zmax) * R.T @ ones``. It can fall
+    outside the standard bounds for some rotations.
+    """
+    zmax = jnp.maximum(1.0, jnp.sqrt(ndim) / 8.0)
+    return cast(
+        jax.Array, kw["x_opt"] + (0.5 / zmax) * (kw["R"].T @ jnp.ones(ndim))
+    )
+
+
+#                                                                  Tag schemas
+# =============================================================================
+
+
+def _bbob_tags(*, separable: bool, unimodal: bool) -> dict[str, bool]:
+    """BBOB tag schema: ``separable`` and ``unimodal``."""
+    return {"separable": separable, "unimodal": unimodal}
+
+
+def _cec_tags(
+    *,
+    unimodal: bool = False,
+    composition: bool = False,
+    rotated: bool = False,
+    noise: bool = False,
+    structure_modified: bool = False,
+) -> dict[str, bool]:
+    """CEC 2005 tag schema.
+
+    ``unimodal`` and ``multimodal`` are mutually exclusive;
+    ``composition`` implies multimodal. ``noise`` marks the
+    stochastic functions whose call signature is ``fn(x, key)``
+    instead of ``fn(x)``. ``structure_modified`` marks functions
+    whose mathematical structure deviates from the CEC 2005 spec
+    for JAX compatibility.
+    """
+    return {
+        "unimodal": unimodal,
+        "multimodal": not unimodal,
+        "composition": composition,
+        "rotated": rotated,
+        "noise": noise,
+        "structure_modified": structure_modified,
+    }
+
+
+#                                                                 FunctionSpec
+# =============================================================================
+
+
+class FunctionSpec(NamedTuple):
+    """Everything the package knows about one benchmark function.
+
+    Attributes
+    ----------
+    name : str
+        Registry key of the function.
+    suite : str
+        Benchmark suite, ``"bbob"`` or ``"cec2005"``.
+    maker : Callable
+        Factory constructing a problem instance. Called as
+        ``maker(ndim=..., key=..., deterministic=...)`` and
+        returning ``(fn, f_opt)``.
+    tags : dict[str, bool]
+        Function characteristics (suite-specific schema).
+    bounds : tuple[float, float]
+        Search-space box bounds.
+    x_opt_from : Callable
+        Resolver mapping the constructed Partial's keyword dict
+        (plus ``ndim``) to the location of the global minimum.
+    """
+
+    name: str
+    suite: str
+    maker: Callable[..., BBOBFn]
+    tags: dict[str, bool]
+    bounds: tuple[float, float]
+    x_opt_from: Callable[[dict[str, Any], int], jax.Array] = _default_x_opt
+
+
+#                                                                   BBOB table
+# =============================================================================
+
+BBOB_SPECS: tuple[FunctionSpec, ...] = (
+    FunctionSpec(
+        name="attractive_sector",
+        suite="bbob",
+        maker=Partial(
+            _make_with_mat, fn=attractive_sector, alpha=10.0, order="QLR"
+        ),
+        tags=_bbob_tags(separable=False, unimodal=True),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="bent_cigar",
+        suite="bbob",
+        maker=Partial(make_bbob, fn=bent_cigar),
+        tags=_bbob_tags(separable=False, unimodal=True),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="discuss",
+        suite="bbob",
+        maker=Partial(make_bbob, fn=discuss),
+        tags=_bbob_tags(separable=False, unimodal=True),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="ellipsoid",
+        suite="bbob",
+        maker=Partial(make_bbob, fn=ellipsoid),
+        tags=_bbob_tags(separable=False, unimodal=True),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="ellipsoid_seperable",
+        suite="bbob",
+        maker=Partial(make_bbob, fn=ellipsoid_seperable),
+        tags=_bbob_tags(separable=True, unimodal=True),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="gallagher_21_peaks",
+        suite="bbob",
+        maker=Partial(
+            _make_gallagher,
+            fn=gallagher_21_peaks,
+            num_peaks=21,
+            w_divisor=19,
+            alpha_first=1000.0**2,
+            y_minval=-4.9,
+            y_maxval=4.9,
+        ),
+        tags=_bbob_tags(separable=False, unimodal=False),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="gallagher_101_peaks",
+        suite="bbob",
+        maker=Partial(
+            _make_gallagher,
+            fn=gallagher_101_peaks,
+            num_peaks=101,
+            w_divisor=99,
+            alpha_first=1000.0,
+            y_minval=-5.0,
+            y_maxval=5.0,
+        ),
+        tags=_bbob_tags(separable=False, unimodal=False),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="griewank_rosenbrock_f8f2",
+        suite="bbob",
+        maker=Partial(make_bbob, fn=griewank_rosenbrock_f8f2),
+        tags=_bbob_tags(separable=False, unimodal=False),
+        bounds=BBOB_BOUNDS,
+        x_opt_from=_griewank_rosenbrock_x_opt,
+    ),
+    FunctionSpec(
+        name="katsuura",
+        suite="bbob",
+        maker=Partial(_make_with_mat, fn=katsuura, alpha=100.0, order="QLR"),
+        tags=_bbob_tags(separable=False, unimodal=False),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="linear_slope",
+        suite="bbob",
+        maker=Partial(_make_linear_slope, fn=linear_slope),
+        tags=_bbob_tags(separable=True, unimodal=True),
+        bounds=BBOB_BOUNDS,
+        x_opt_from=_linear_slope_x_opt,
+    ),
+    FunctionSpec(
+        name="lunacek_bi_rastrigin",
+        suite="bbob",
+        maker=Partial(_make_lunacek, fn=lunacek_bi_rastrigin),
+        tags=_bbob_tags(separable=False, unimodal=False),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="rastrigin",
+        suite="bbob",
+        maker=Partial(_make_with_mat, fn=rastrigin, alpha=10.0, order="RLQ"),
+        tags=_bbob_tags(separable=False, unimodal=False),
+        bounds=BBOB_BOUNDS,
+    ),
+    # NOTE: rastrigin_seperable and skew_rastrigin_bueche were tagged
+    # unimodal=True before the spec table existed; both are Rastrigin
+    # variants and highly multimodal.
+    FunctionSpec(
+        name="rastrigin_seperable",
+        suite="bbob",
+        maker=Partial(make_bbob, fn=rastrigin_seperable),
+        tags=_bbob_tags(separable=True, unimodal=False),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="rosenbrock",
+        suite="bbob",
+        maker=Partial(make_bbob, fn=rosenbrock),
+        tags=_bbob_tags(separable=False, unimodal=True),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="rosenbrock_rotated",
+        suite="bbob",
+        maker=Partial(make_bbob, fn=rosenbrock_rotated),
+        tags=_bbob_tags(separable=False, unimodal=True),
+        bounds=BBOB_BOUNDS,
+        x_opt_from=_rosenbrock_rotated_x_opt,
+    ),
+    FunctionSpec(
+        name="schaffer_f7_condition_10",
+        suite="bbob",
+        maker=Partial(
+            _make_with_mat,
+            fn=schaffer_f7_condition_10,
+            alpha=10.0,
+            order="LQ",
+        ),
+        tags=_bbob_tags(separable=False, unimodal=False),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="schaffer_f7_condition_1000",
+        suite="bbob",
+        maker=Partial(
+            _make_with_mat,
+            fn=schaffer_f7_condition_1000,
+            alpha=1000.0,
+            order="LQ",
+        ),
+        tags=_bbob_tags(separable=False, unimodal=False),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="schwefel_xsinx",
+        suite="bbob",
+        maker=Partial(_make_schwefel, fn=schwefel_xsinx),
+        tags=_bbob_tags(separable=False, unimodal=False),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="sharp_ridge",
+        suite="bbob",
+        maker=Partial(_make_with_mat, fn=sharp_ridge, alpha=10.0, order="QLR"),
+        tags=_bbob_tags(separable=False, unimodal=True),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="skew_rastrigin_bueche",
+        suite="bbob",
+        maker=Partial(make_bbob, fn=skew_rastrigin_bueche),
+        tags=_bbob_tags(separable=True, unimodal=False),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="sphere",
+        suite="bbob",
+        maker=Partial(make_bbob, fn=sphere),
+        tags=_bbob_tags(separable=True, unimodal=True),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="step_ellipsoid",
+        suite="bbob",
+        maker=Partial(
+            _make_with_mat, fn=step_ellipsoid, alpha=10.0, order="LR"
+        ),
+        tags=_bbob_tags(separable=False, unimodal=True),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="sum_of_different_powers",
+        suite="bbob",
+        maker=Partial(make_bbob, fn=sum_of_different_powers),
+        tags=_bbob_tags(separable=False, unimodal=True),
+        bounds=BBOB_BOUNDS,
+    ),
+    FunctionSpec(
+        name="weierstrass",
+        suite="bbob",
+        maker=Partial(_make_with_mat, fn=weierstrass, alpha=0.01, order="RLQ"),
+        tags=_bbob_tags(separable=False, unimodal=False),
+        bounds=BBOB_BOUNDS,
+    ),
+)
+
+#                                                               CEC 2005 table
+# =============================================================================
+
+_NC = 10  # num_components for all composition functions (F15-F25)
+
+# Lambda values shared by composition function groups. Stored as plain
+# Python tuples (not jnp.array) so that import order does not bake in a
+# dtype before the user has had a chance to call
+# ``jax.config.update("jax_enable_x64", True)``. The factories convert
+# them to jax.Array at call time via ``jnp.asarray(..., dtype=float)``.
+_COMP1_LAMBDA: tuple[float, ...] = (
+    1,
+    1,
+    10,
+    10,
+    5 / 60,
+    5 / 60,
+    5 / 32,
+    5 / 32,
+    5 / 100,
+    5 / 100,
+)
+_COMP2_LAMBDA_F18: tuple[float, ...] = (
+    2 * 5 / 32,
+    5 / 32,
+    2 * 1,
+    1,
+    2 * 5 / 100,
+    5 / 100,
+    2 * 10,
+    10,
+    2 * 5 / 60,
+    5 / 60,
+)
+_COMP2_LAMBDA_F19: tuple[float, ...] = (
+    0.1 * 5 / 32,
+    5 / 32,
+    2 * 1,
+    1,
+    2 * 5 / 100,
+    5 / 100,
+    2 * 10,
+    10,
+    2 * 5 / 60,
+    5 / 60,
+)
+_COMP3_LAMBDA: tuple[float, ...] = (
+    5 * 5 / 100,
+    5 / 100,
+    5 * 1,
+    1,
+    5 * 1,
+    1,
+    5 * 10,
+    10,
+    5 * 5 / 200,
+    5 / 200,
+)
+
+CEC2005_SPECS: tuple[FunctionSpec, ...] = (
+    FunctionSpec(
+        name="f1",
+        suite="cec2005",
+        maker=Partial(
+            make_cec2005,
+            fn=f1,
+            num_components=1,
+            minval=-100.0,
+            maxval=100.0,
+        ),
+        tags=_cec_tags(unimodal=True),
+        bounds=(-100.0, 100.0),
+    ),
+    FunctionSpec(
+        name="f2",
+        suite="cec2005",
+        maker=Partial(
+            make_cec2005,
+            fn=f2,
+            num_components=1,
+            minval=-100.0,
+            maxval=100.0,
+        ),
+        tags=_cec_tags(unimodal=True),
+        bounds=(-100.0, 100.0),
+    ),
+    FunctionSpec(
+        name="f3",
+        suite="cec2005",
+        maker=Partial(
+            make_cec2005,
+            fn=f3,
+            num_components=1,
+            minval=-100.0,
+            maxval=100.0,
+        ),
+        tags=_cec_tags(unimodal=True, rotated=True),
+        bounds=(-100.0, 100.0),
+    ),
+    FunctionSpec(
+        name="f4",
+        suite="cec2005",
+        maker=Partial(
+            make_cec2005,
+            fn=f4,
+            num_components=1,
+            minval=-100.0,
+            maxval=100.0,
+        ),
+        tags=_cec_tags(unimodal=True, noise=True),
+        bounds=(-100.0, 100.0),
+    ),
+    FunctionSpec(
+        name="f5",
+        suite="cec2005",
+        maker=Partial(_make_cec2005_f5, fn=f5, num_components=1),
+        tags=_cec_tags(unimodal=True),
+        bounds=(-100.0, 100.0),
+    ),
+    FunctionSpec(
+        name="f6",
+        suite="cec2005",
+        maker=Partial(
+            make_cec2005,
+            fn=f6,
+            num_components=1,
+            minval=-100.0,
+            maxval=100.0,
+        ),
+        tags=_cec_tags(),
+        bounds=(-100.0, 100.0),
+    ),
+    FunctionSpec(
+        name="f7",
+        suite="cec2005",
+        maker=Partial(_make_cec2005_f7, fn=f7, num_components=1),
+        tags=_cec_tags(rotated=True),
+        bounds=(0.0, 600.0),
+    ),
+    FunctionSpec(
+        name="f8",
+        suite="cec2005",
+        maker=Partial(_make_cec2005_f8, fn=f8, num_components=1),
+        tags=_cec_tags(rotated=True),
+        bounds=(-32.0, 32.0),
+    ),
+    FunctionSpec(
+        name="f9",
+        suite="cec2005",
+        maker=Partial(
+            make_cec2005, fn=f9, num_components=1, minval=-5.0, maxval=5.0
+        ),
+        tags=_cec_tags(),
+        bounds=(-5.0, 5.0),
+    ),
+    FunctionSpec(
+        name="f10",
+        suite="cec2005",
+        maker=Partial(
+            _make_cec2005_conditioned_single,
+            fn=f10,
+            minval=-5.0,
+            maxval=5.0,
+            condition_number=2.0,
+        ),
+        tags=_cec_tags(rotated=True),
+        bounds=(-5.0, 5.0),
+    ),
+    FunctionSpec(
+        name="f11",
+        suite="cec2005",
+        maker=Partial(
+            _make_cec2005_conditioned_single,
+            fn=f11,
+            minval=-0.5,
+            maxval=0.5,
+            condition_number=5.0,
+        ),
+        tags=_cec_tags(rotated=True),
+        bounds=(-0.5, 0.5),
+    ),
+    FunctionSpec(
+        name="f12",
+        suite="cec2005",
+        maker=Partial(_make_cec2005_f12, fn=f12, num_components=1),
+        tags=_cec_tags(),
+        bounds=(-math.pi, math.pi),
+    ),
+    FunctionSpec(
+        name="f13",
+        suite="cec2005",
+        maker=Partial(
+            make_cec2005, fn=f13, num_components=1, minval=-3.0, maxval=1.0
+        ),
+        tags=_cec_tags(),
+        bounds=(-3.0, 1.0),
+    ),
+    FunctionSpec(
+        name="f14",
+        suite="cec2005",
+        maker=Partial(
+            _make_cec2005_conditioned_single,
+            fn=f14,
+            minval=-100.0,
+            maxval=100.0,
+            condition_number=3.0,
+        ),
+        tags=_cec_tags(rotated=True),
+        bounds=(-100.0, 100.0),
+    ),
+    FunctionSpec(
+        name="f15",
+        suite="cec2005",
+        maker=Partial(
+            _add_f_max,
+            base_factory=make_cec2005,
+            comp_fns_builder=_composition1_fns,
+            comp_lambda=_COMP1_LAMBDA,
+            fn=f15,
+            num_components=_NC,
+            minval=-5.0,
+            maxval=5.0,
+        ),
+        tags=_cec_tags(composition=True),
+        bounds=(-5.0, 5.0),
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="f16",
+        suite="cec2005",
+        maker=Partial(
+            _add_f_max,
+            base_factory=make_cec2005_conditioned,
+            comp_fns_builder=_composition1_fns,
+            comp_lambda=_COMP1_LAMBDA,
+            fn=f16,
+            num_components=_NC,
+            minval=-5.0,
+            maxval=5.0,
+            condition_numbers=(2.0,) * _NC,
+        ),
+        tags=_cec_tags(composition=True, rotated=True),
+        bounds=(-5.0, 5.0),
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="f17",
+        suite="cec2005",
+        maker=Partial(
+            _add_f_max,
+            base_factory=make_cec2005,
+            comp_fns_builder=_composition1_fns,
+            comp_lambda=_COMP1_LAMBDA,
+            fn=f17,
+            num_components=_NC,
+            minval=-5.0,
+            maxval=5.0,
+        ),
+        tags=_cec_tags(composition=True, rotated=True, noise=True),
+        bounds=(-5.0, 5.0),
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="f18",
+        suite="cec2005",
+        maker=Partial(
+            _add_f_max,
+            base_factory=_make_cec2005_f18_family,
+            comp_fns_builder=_composition2_fns,
+            comp_lambda=_COMP2_LAMBDA_F18,
+            fn=f18,
+            num_components=_NC,
+        ),
+        tags=_cec_tags(composition=True, rotated=True),
+        bounds=(-5.0, 5.0),
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="f19",
+        suite="cec2005",
+        maker=Partial(
+            _add_f_max,
+            base_factory=_make_cec2005_f18_family,
+            comp_fns_builder=_composition2_fns,
+            comp_lambda=_COMP2_LAMBDA_F19,
+            fn=f19,
+            num_components=_NC,
+        ),
+        tags=_cec_tags(composition=True, rotated=True),
+        bounds=(-5.0, 5.0),
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="f20",
+        suite="cec2005",
+        maker=Partial(
+            _add_f_max,
+            base_factory=_make_cec2005_f20,
+            comp_fns_builder=_composition2_fns,
+            comp_lambda=_COMP2_LAMBDA_F18,
+            fn=f20,
+            num_components=_NC,
+        ),
+        tags=_cec_tags(composition=True, rotated=True),
+        bounds=(-5.0, 5.0),
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="f21",
+        suite="cec2005",
+        maker=Partial(
+            _add_f_max,
+            base_factory=make_cec2005_conditioned,
+            comp_fns_builder=_composition3_fns,
+            comp_lambda=_COMP3_LAMBDA,
+            fn=f21,
+            num_components=_NC,
+            minval=-5.0,
+            maxval=5.0,
+            condition_numbers=(1.0,) * _NC,
+        ),
+        tags=_cec_tags(composition=True, rotated=True),
+        bounds=(-5.0, 5.0),
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="f22",
+        suite="cec2005",
+        maker=Partial(
+            _add_f_max,
+            base_factory=make_cec2005_conditioned,
+            comp_fns_builder=_composition3_fns,
+            comp_lambda=_COMP3_LAMBDA,
+            fn=f22,
+            num_components=_NC,
+            minval=-5.0,
+            maxval=5.0,
+            condition_numbers=(
+                10.0,
+                20.0,
+                50.0,
+                100.0,
+                200.0,
+                1000.0,
+                2000.0,
+                3000.0,
+                4000.0,
+                5000.0,
+            ),
+        ),
+        tags=_cec_tags(composition=True, rotated=True),
+        bounds=(-5.0, 5.0),
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="f23",
+        suite="cec2005",
+        maker=Partial(
+            _add_f_max,
+            base_factory=make_cec2005_conditioned,
+            comp_fns_builder=_composition3_fns,
+            comp_lambda=_COMP3_LAMBDA,
+            fn=f23,
+            num_components=_NC,
+            minval=-5.0,
+            maxval=5.0,
+            condition_numbers=(1.0,) * _NC,
+        ),
+        tags=_cec_tags(
+            composition=True, rotated=True, structure_modified=True
+        ),
+        bounds=(-5.0, 5.0),
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="f24",
+        suite="cec2005",
+        maker=Partial(
+            make_cec2005_conditioned,
+            fn=f24,
+            num_components=_NC,
+            minval=-5.0,
+            maxval=5.0,
+            condition_numbers=(
+                100.0,
+                50.0,
+                30.0,
+                10.0,
+                5.0,
+                5.0,
+                4.0,
+                3.0,
+                2.0,
+                2.0,
+            ),
+        ),
+        tags=_cec_tags(
+            composition=True,
+            rotated=True,
+            noise=True,
+            structure_modified=True,
+        ),
+        bounds=(-5.0, 5.0),
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="f25",
+        suite="cec2005",
+        maker=Partial(
+            make_cec2005_conditioned,
+            fn=f25,
+            num_components=_NC,
+            minval=-5.0,
+            maxval=5.0,
+            condition_numbers=(
+                100.0,
+                50.0,
+                30.0,
+                10.0,
+                5.0,
+                5.0,
+                4.0,
+                3.0,
+                2.0,
+                2.0,
+            ),
+        ),
+        tags=_cec_tags(
+            composition=True,
+            rotated=True,
+            noise=True,
+            structure_modified=True,
+        ),
+        bounds=(2.0, 5.0),
+        x_opt_from=_first_component_x_opt,
+    ),
+)
+
+
+#                                                                Derived views
+# =============================================================================
+
+SPECS: tuple[FunctionSpec, ...] = BBOB_SPECS + CEC2005_SPECS
+SPEC_BY_NAME: dict[str, FunctionSpec] = {s.name: s for s in SPECS}
+
+if len(SPEC_BY_NAME) != len(SPECS):
+    raise RuntimeError("duplicate function names in SPECS")

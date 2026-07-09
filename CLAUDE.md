@@ -23,6 +23,7 @@ make docs                  # Start MkDocs dev server
 
 `src/bbob_jax/__init__.py` exports:
 - 24 named BBOB functions (e.g. `sphere`, `rastrigin`, `rosenbrock`)
+- `problem` / `Problem` — one-lookup accessor bundling fn, x_opt, f_opt, bounds, tags, noise arity
 - `registry` — randomized BBOB factory (random x_opt, f_opt, rotation matrices)
 - `registry_original` — deterministic BBOB factory (zero x_opt, zero f_opt, identity rotations)
 - `cec2005_registry` — randomized CEC 2005 factory (25 functions `f1`–`f25`)
@@ -31,16 +32,39 @@ make docs                  # Start MkDocs dev server
 - `cec2005_function_characteristics` — CEC 2005 metadata dict
 - `bbob_bounds` / `cec2005_bounds` — per-function search-space bounds (also via the `bounds` submodule)
 
+### Spec Table (single source of truth)
+
+`_src/spec.py` holds one `FunctionSpec` row per function: implementation,
+factory (`maker`), tags, bounds, and an `x_opt_from` resolver locating the
+true optimum (e.g. `linear_slope`'s optimum is `_ls_x_opt`, compositions use
+the first component's optimum). The registries, tag dicts and bounds dicts
+are derived views of this table — **adding a function means implementing it
+in `bbob.py`/`cec2005.py` and adding one spec row**; tests parametrize off
+the registries and pick it up automatically. See `docs/adr/0002`.
+
 ### Registry Pattern
 
-Both registries map `function_name → factory`, where each factory is called as:
+The registries map `function_name → factory`, where each factory is called as:
 ```python
 fn, f_opt = registry["sphere"](ndim=2, key=jax_key)
 # fn: Callable[[jax.Array], jax.Array] — partially applied with x_opt, f_opt, R, Q
 # f_opt: jax.Array — the global minimum value
 ```
 
-Implemented in `_src/registry.py` using `jax.tree_util.Partial` to bind parameters.
+Factories live in `_src/factories.py` and use `jax.tree_util.Partial` to
+bind parameters. Every factory takes a `deterministic` flag; the
+`*_original` registries are the same makers with `deterministic=True`
+bound (zero shift, identity rotations, zero f_opt).
+
+### Problem Accessor
+
+```python
+p = bbob_jax.problem("rastrigin", ndim=2, key=jax_key)  # deterministic=True for the *_original instance
+p.fn, p.x_opt, p.f_opt, p.bounds, p.tags, p.noisy
+```
+`fn(p.x_opt) == p.f_opt` holds for every function (documented exceptions:
+deterministic CEC compositions are degenerate). Noisy CEC functions
+(`noise` tag) are called as `fn(x, key)`.
 
 ### Core Function Signature
 
@@ -50,11 +74,15 @@ def fn(x, x_opt, f_opt, R, Q) -> jax.Array
 ```
 After partial application via the registry, the user-facing signature is just `fn(x)`. (Some factories also bind extra precomputed keyword arguments, e.g. `_mat` or `_f_max`.)
 
-Functions compose transformations from `_src/utils.py`:
+BBOB functions compose transformations from `_src/transforms.py`:
 - Shift by `x_opt`, rotate with `R`/`Q`
 - Apply `tosz_func` (smooth log/sine deformation) and `tasy_func` (asymmetry)
 - Apply `lambda_func` (diagonal conditioning)
 - Add boundary `penalty` and offset by `f_opt`
+
+This internal signature is deliberately kept as-is (including its warts —
+see `docs/adr/0001`): problem instances are pinned to keys by downstream
+databanks, so the parameter derivation must not change.
 
 Gradient convention: softjax (`sj.*`) straight-through estimators are used only where JAX's own gradient is degenerate (zero, undefined, or infinite — e.g. `sign`, `round`, `abs`, `sqrt` at 0). Operations with well-defined subgradients, in particular `max`/`min` reductions, use plain `jnp` — the straight-through soft branch would otherwise execute in every forward pass and inflate grad-compile time (see the Gallagher functions).
 
@@ -68,21 +96,31 @@ src/bbob_jax/
 └── _src/
     ├── bbob.py          # All 24 BBOB function implementations
     ├── cec2005.py       # All 25 CEC 2005 function implementations (f1–f25)
-    ├── registry.py      # BBOB + CEC 2005 factories + registry dicts
-    ├── utils.py         # tosz_func, tasy_func, lambda_func, rotation_matrix, penalty, etc.
-    ├── tags.py          # function_characteristics metadata (BBOB)
-    ├── cec2005_tags.py  # cec2005_function_characteristics metadata
-    ├── bounds.py        # bbob_bounds, cec2005_bounds dicts
+    ├── spec.py          # FunctionSpec table — single source of truth per function
+    ├── factories.py     # Mode-parameterized makers (deterministic= flag)
+    ├── registry.py      # The four registry dicts, derived from spec.py
+    ├── problem.py       # Problem record + problem() accessor
+    ├── transforms.py    # BBOB transforms: tosz, tasy, lambda, penalty
+    ├── composition.py   # CEC kernels + hybrid composition machinery
+    ├── sampling.py      # fopt, xopt, bernoulli_vector, rotation_matrix
+    ├── mesh.py          # _create_mesh grid evaluator (matplotlib-free)
+    ├── tags.py          # function_characteristics, derived from spec.py
+    ├── cec2005_tags.py  # cec2005_function_characteristics, derived from spec.py
+    ├── bounds.py        # bbob_bounds, cec2005_bounds, derived from spec.py
     └── plotting.py      # plot_2d, plot_3d (requires optional matplotlib dep)
 ```
 
+Architecture decisions are recorded in `docs/adr/`.
+
 ### Testing
 
-Tests live in `tests/` (`test_example.py` for BBOB, `test_cec2005.py` for CEC 2005, plus `test_bounds.py`, `test_cec2005_utils.py`). They are parametrized over all functions × multiple dimensions × both registries. Each test validates:
+Tests live in `tests/` (`test_example.py` for BBOB, `test_cec2005.py` for CEC 2005, plus `test_bounds.py`, `test_composition.py`, `test_problem.py`, `test_consistency.py`, `test_gallagher_equivalence.py`). They are parametrized over all functions × multiple dimensions × both registries. Each test validates:
 - Correct scalar output shape
 - JIT compilation (`jax.jit`)
 - Vectorization (`jax.vmap`)
 - Gradient computation (`jax.grad`)
+- `fn(x_opt) == f_opt` for both suites via `problem()` (`test_problem.py`)
+- Registry/tags/bounds key-set consistency and tag schemas (`test_consistency.py`)
 
 `matplotlib` is an optional dependency (install group `plot`); tests don't require it.
 

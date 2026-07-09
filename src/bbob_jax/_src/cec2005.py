@@ -22,7 +22,7 @@ import jax.numpy as jnp
 import jax.random as jr
 import softjax as sj
 
-from bbob_jax._src.utils import (
+from bbob_jax._src.composition import (
     ackley,
     cec2005_weierstrass,
     griewank,
