@@ -2,7 +2,7 @@
 
 [View on GitHub](https://github.com/bessagroup/bbob-jax)
 
-JAX implementations of the **BBOB** benchmark functions (Finck et al., 2009) [^1] and the **CEC 2005** benchmark functions (Suganthan et al., 2005) [^4] for black-box optimization.
+JAX implementations of the **BBOB** benchmark functions (Finck et al., 2009) [^1], the **CEC 2005** benchmark functions (Suganthan et al., 2005) [^4] and the **CEC 2017** benchmark functions (Awad et al., 2016) [^5] for black-box optimization.
 
 **First publication:** October 17, 2025
 
@@ -10,11 +10,11 @@ JAX implementations of the **BBOB** benchmark functions (Finck et al., 2009) [^1
 
 ## Summary
 
-This package provides JAX implementations of two widely-used benchmark suites for black-box optimization: the **BBOB** 24 noise-free functions (Finck et al., 2009) [^1] and the **CEC 2005** 25 real-parameter functions (Suganthan et al., 2005) [^4]. All functions support automatic differentiation, JIT compilation, and XLA-accelerated evaluation.
+This package provides JAX implementations of three widely-used benchmark suites for black-box optimization: the **BBOB** 24 noise-free functions (Finck et al., 2009) [^1], the **CEC 2005** 25 real-parameter functions (Suganthan et al., 2005) [^4] and the **CEC 2017** 29 bound-constrained functions (Awad et al., 2016) [^5]. All functions support automatic differentiation, JIT compilation, and XLA-accelerated evaluation.
 
 ## Statement of need
 
-The BBOB and CEC 2005 benchmark suites are cornerstones of black-box optimization research. This repository provides JAX reimplementations of both: the 24 BBOB noise-free functions originally written in C, and the 25 CEC 2005 real-parameter functions. Translating these suites to JAX enables automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance — making them ideal for research in optimization, machine learning, and evolutionary algorithms.
+The BBOB and CEC benchmark suites are cornerstones of black-box optimization research. This repository provides JAX reimplementations of all three: the 24 BBOB noise-free functions originally written in C, the 25 CEC 2005 real-parameter functions, and the 29 CEC 2017 bound-constrained functions (simple, hybrid and composition; F2 was officially withdrawn). Translating these suites to JAX enables automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance — making them ideal for research in optimization, machine learning, and evolutionary algorithms.
 
 <div align="center">
   <img src="img/bbob_functions_overview_3d.png" alt="BBOB functions 3D overview" width="80%">
@@ -32,6 +32,19 @@ The BBOB and CEC 2005 benchmark suites are cornerstones of black-box optimizatio
   <img src="img/cec2005_functions_overview_2d.png" alt="CEC 2005 functions 2D overview" width="80%">
   <br>
   <em>2D contour plots of the 25 CEC 2005 benchmark functions.</em>
+  <br><br>
+  <img src="img/cec2017_functions_overview_3d.png" alt="CEC 2017 functions 3D overview" width="80%">
+  <br>
+  <em>3D surface plots of the 29 CEC 2017 benchmark functions.</em>
+  <br><br>
+  <img src="img/cec2017_functions_overview_2d.png" alt="CEC 2017 functions 2D overview" width="80%">
+  <br>
+  <em>2D contour plots of the 29 CEC 2017 benchmark functions (F2 was
+  officially withdrawn). Panels marked "(2D slice of nD)" belong to functions
+  only defined from n dimensions up (one dimension per hybrid subcomponent
+  kernel); they show a 2D slice of the smallest valid deterministic instance —
+  the first two coordinates sweep the search range while the remaining
+  coordinates stay pinned at the optimum plane.</em>
 </div>
 
 
@@ -110,4 +123,6 @@ This project is licensed under the BSD 3-Clause License. See [LICENSE](https://g
 [^3]: Lange, R. T. (2022), evosax: JAX-based Evolution Strategies. arXiv preprint [arXiv:2212.04180](https://arxiv.org/abs/2212.04180).
 
 [^4]: Suganthan, P. N., Hansen, N., Liang, J. J., and Deb, K. (2005), Problem Definitions and Evaluation Criteria for the CEC 2005 Special Session on Real-Parameter Optimization.
+
+[^5]: Awad, N. H., Ali, M. Z., Liang, J. J., Qu, B. Y., and Suganthan, P. N. (2016), Problem Definitions and Evaluation Criteria for the CEC 2017 Special Session and Competition on Single Objective Real-Parameter Numerical Optimization.
 

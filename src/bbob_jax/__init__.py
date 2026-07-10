@@ -33,11 +33,15 @@ from bbob_jax._src.bbob import (
     sum_of_different_powers,
     weierstrass,
 )
-from bbob_jax._src.bounds import bbob_bounds, cec2005_bounds
+from bbob_jax._src.bounds import bbob_bounds, cec2005_bounds, cec2017_bounds
 from bbob_jax._src.cec2005_tags import cec2005_function_characteristics
+from bbob_jax._src.cec2017_tags import cec2017_function_characteristics
+from bbob_jax._src.problem import Problem, problem
 from bbob_jax._src.registry import (
     cec2005_registry,
     cec2005_registry_original,
+    cec2017_registry,
+    cec2017_registry_original,
     registry,
     registry_original,
 )
@@ -60,9 +64,14 @@ __all__ = [
     "cec2005_registry",
     "cec2005_registry_original",
     "cec2005_function_characteristics",
+    "cec2017_registry",
+    "cec2017_registry_original",
+    "cec2017_function_characteristics",
     "bbob_bounds",
     "cec2005_bounds",
-    "bbob",
+    "cec2017_bounds",
+    "Problem",
+    "problem",
     "attractive_sector",
     "bent_cigar",
     "discuss",

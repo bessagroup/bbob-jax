@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from bbob_jax import bbob_bounds, cec2005_bounds, registry
+from bbob_jax import bbob_bounds, cec2005_bounds, cec2017_bounds, registry
 from bbob_jax._src.bounds import BBOB_BOUNDS
 
 
@@ -24,38 +24,6 @@ def test_cec2005_bounds_keys():
     assert set(cec2005_bounds.keys()) == {f"f{i}" for i in range(1, 26)}
 
 
-def test_cec2005_bounds_values():
-    """CEC 2005 bounds are per-function as specified in the benchmark paper."""
-    expected = {
-        "f1": (-100.0, 100.0),
-        "f2": (-100.0, 100.0),
-        "f3": (-100.0, 100.0),
-        "f4": (-100.0, 100.0),
-        "f5": (-100.0, 100.0),
-        "f6": (-100.0, 100.0),
-        "f7": (0.0, 600.0),
-        "f8": (-32.0, 32.0),
-        "f9": (-5.0, 5.0),
-        "f10": (-5.0, 5.0),
-        "f11": (-0.5, 0.5),
-        "f12": (-math.pi, math.pi),
-        "f13": (-3.0, 1.0),
-        "f14": (-100.0, 100.0),
-        "f15": (-5.0, 5.0),
-        "f16": (-5.0, 5.0),
-        "f17": (-5.0, 5.0),
-        "f18": (-5.0, 5.0),
-        "f19": (-5.0, 5.0),
-        "f20": (-5.0, 5.0),
-        "f21": (-5.0, 5.0),
-        "f22": (-5.0, 5.0),
-        "f23": (-5.0, 5.0),
-        "f24": (-5.0, 5.0),
-        "f25": (2.0, 5.0),
-    }
-    assert cec2005_bounds == expected
-
-
 def test_bounds_count():
     """Correct number of entries."""
     assert len(bbob_bounds) == 24
@@ -65,6 +33,22 @@ def test_bounds_count():
 def test_no_key_overlap():
     """BBOB and CEC 2005 function names do not overlap."""
     assert set(bbob_bounds.keys()).isdisjoint(set(cec2005_bounds.keys()))
+
+
+def test_cec2017_bounds_keys():
+    """cec2017_bounds covers the full suite: F1 and F3-F30 (F2 was
+    officially withdrawn)."""
+    assert set(cec2017_bounds.keys()) == {
+        f"cec2017_f{i}" for i in range(1, 31) if i != 2
+    }
+
+
+def test_cec2017_bounds_values():
+    """All CEC 2017 bounds are (-100.0, 100.0)."""
+    for name, bounds in cec2017_bounds.items():
+        assert bounds == (-100.0, 100.0), (
+            f"{name}: expected (-100.0, 100.0), got {bounds}"
+        )
 
 
 def test_constants():

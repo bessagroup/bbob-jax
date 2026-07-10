@@ -13,7 +13,7 @@ from matplotlib.colors import LogNorm, SymLogNorm
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
 # Local
-from .utils import _create_mesh
+from .mesh import _create_mesh
 
 #                                                          Authorship & Credits
 # =============================================================================

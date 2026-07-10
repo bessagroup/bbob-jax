@@ -1,0 +1,792 @@
+"""CEC component kernels and hybrid-composition machinery.
+
+Provides the base kernels used inside the CEC 2005 functions
+(``ackley``, ``griewank``, ``scaffer_f6``,
+``cec2005_weierstrass``) and the CEC 2017 functions
+(``cec_bent_cigar``, ``zakharov``, ``cec_rosenbrock``,
+``cec_rastrigin``, ``schaffer_f7``, ``levy``,
+``modified_schwefel``, ``high_conditioned_elliptic``,
+``discus``, ``expanded_schaffer_f6``,
+``expanded_griewank_rosenbrock``, ``hgbat``,
+``cec2017_katsuura``), the CEC 2017 hybrid chunk partitioning
+(``cec2017_hybrid_partition``), plus the differentiable CEC
+2005 hybrid composition used by F15-F25 and its ``_f_max``
+precomputation. Used by the CEC suites only; the BBOB
+transformations live in ``transforms.py``.
+
+Kernel convention: bare ``(ndim,) -> scalar`` functions with
+minimum 0 at the origin (exception: ``levy``, whose minimum
+is at all-ones — see its docstring). NaN inputs propagate to
+the output; ``sqrt`` calls carry a small epsilon instead of
+using ``sj.sqrt`` because the latter maps NaN to 0.
+"""
+
+#                                                                       Modules
+# =============================================================================
+
+# Standard
+import math
+from typing import cast
+
+# Third-party
+import jax
+import jax.numpy as jnp
+import softjax as sj
+
+#                                                          Authorship & Credits
+# =============================================================================
+__author__ = "Martin van der Schelling (M.P.vanderSchelling@tudelft.nl)"
+__credits__ = ["Martin van der Schelling"]
+__status__ = "Stable"
+# =============================================================================
+
+
+def _finite_like(x: jax.Array) -> jax.Array:
+    """Clamp non-finite values to safe finite bounds."""
+    finfo = jnp.finfo(x.dtype)
+    return jnp.nan_to_num(
+        x, nan=0.0, posinf=finfo.max / 1e6, neginf=finfo.min / 1e6
+    )
+
+
+def ackley(x: jax.Array) -> jax.Array:
+    """Ackley function. Minimum 0 at origin.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+    sum_sq = jnp.sum(jnp.square(x))
+    sum_cos = jnp.sum(jnp.cos(2.0 * jnp.pi * x))
+    # Reformulated to pair cancelling terms and avoid catastrophic
+    # cancellation at z=0.  Original: -20*exp(A) - exp(B) + 20 + e
+    # Rewrite:  -20*(exp(A) - 1) - (exp(B) - exp(1))
+    # Small epsilon in sqrt avoids NaN gradient at x=0 (sqrt'(0) = inf)
+    return -20.0 * (jnp.exp(-0.2 * jnp.sqrt(sum_sq / ndim + 1e-20)) - 1.0) - (
+        jnp.exp(sum_cos / ndim) - jnp.exp(1.0)
+    )
+
+
+def griewank(x: jax.Array) -> jax.Array:
+    """Griewank function. Minimum 0 at origin.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+    indices = jnp.arange(1, ndim + 1, dtype=x.dtype)
+    sum_sq = jnp.sum(jnp.square(x)) / 4000.0
+    prod_cos = jnp.prod(jnp.cos(x / jnp.sqrt(indices)))
+    return sum_sq - prod_cos + 1.0
+
+
+def scaffer_f6(x: jax.Array, y: jax.Array) -> jax.Array:
+    """Scaffer's F6 2D kernel. Minimum 0 at (0, 0).
+
+    Parameters
+    ----------
+    x : jax.Array
+        First scalar input.
+    y : jax.Array
+        Second scalar input.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    r2 = jnp.square(x) + jnp.square(y)
+    radius = jnp.sqrt(r2 + 1e-12)
+    return 0.5 + (jnp.sin(radius) ** 2 - 0.5) / (1.0 + 0.001 * r2) ** 2
+
+
+def cec2005_weierstrass(x: jax.Array) -> jax.Array:
+    """Weierstrass function with CEC 2005 parameters.
+
+    Uses ``a=0.5``, ``b=3``, and 21 terms (k = 0 .. 20).
+    Named separately from the BBOB weierstrass which uses
+    12 terms with different parameters. Minimum is 0 at
+    origin by subtraction of the constant term.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    a, b = 0.5, 3.0
+    k = jnp.arange(0, 21, dtype=float)
+    ak = a**k  # (21,)
+    bk = b**k  # (21,)
+    # x: (ndim,), expand to (ndim, 1); k: (21,) → broadcast to (ndim, 21)
+    cos_terms = ak * jnp.cos(
+        2.0 * jnp.pi * bk * (x[..., None] + 0.5)
+    )  # (ndim, 21)
+    # Per-element difference avoids catastrophic cancellation at z=0
+    cos_ref = ak * jnp.cos(jnp.pi * bk)  # (21,)
+    return jnp.sum(cos_terms - cos_ref[None, :])
+
+
+#                                                             CEC 2017 kernels
+# =============================================================================
+# Ground truth is the official cec17_test_func.c ("code wins" over the report
+# where they disagree); each function in cec2017.py documents its divergences.
+# Names clashing with the full BBOB functions in bbob.py carry a ``cec_``
+# prefix (cf. ``cec2005_weierstrass``).
+
+
+def cec_bent_cigar(x: jax.Array) -> jax.Array:
+    """Bent Cigar kernel. Minimum 0 at origin.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    return x[0] ** 2 + 1e6 * jnp.sum(x[1:] ** 2)
+
+
+def zakharov(x: jax.Array) -> jax.Array:
+    """Zakharov kernel. Minimum 0 at origin.
+
+    ``sum(x^2) + s^2 + s^4`` with ``s = sum(0.5 * i * x_i)``
+    (1-based ``i``). Unimodal.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+    weights = 0.5 * jnp.arange(1, ndim + 1, dtype=x.dtype)
+    s = jnp.sum(weights * x)
+    return jnp.sum(jnp.square(x)) + s**2 + s**4
+
+
+def cec_rosenbrock(x: jax.Array) -> jax.Array:
+    """Rosenbrock kernel with the CEC ``+1`` re-centering.
+
+    Evaluates the classic Rosenbrock at ``w = x + 1`` so the
+    minimum 0 sits at the origin (the reference code's
+    "shift to origin").
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    w = x + 1.0
+    return jnp.sum(100.0 * (w[:-1] ** 2 - w[1:]) ** 2 + (w[:-1] - 1.0) ** 2)
+
+
+def cec_rastrigin(x: jax.Array) -> jax.Array:
+    """Rastrigin kernel. Minimum 0 at origin.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    return jnp.sum(jnp.square(x) - 10.0 * jnp.cos(2.0 * jnp.pi * x) + 10.0)
+
+
+def schaffer_f7(x: jax.Array) -> jax.Array:
+    """Schaffer's F7 kernel. Minimum 0 at origin. Needs ``ndim >= 2``.
+
+    ``((1/(D-1)) * sum(sqrt(s_i) * (1 + sin^2(50 * s_i^0.2))))^2``
+    with ``s_i = sqrt(x_i^2 + x_{i+1}^2)``. The epsilon inside the
+    square roots keeps the gradient finite at the origin while
+    letting NaN inputs propagate (unlike ``sj.sqrt``).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``, ``ndim >= 2``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+    s = jnp.sqrt(x[:-1] ** 2 + x[1:] ** 2 + 1e-12)
+    terms = jnp.sqrt(s) * (1.0 + jnp.sin(50.0 * s**0.2) ** 2)
+    return (jnp.sum(terms) / (ndim - 1)) ** 2
+
+
+def levy(x: jax.Array) -> jax.Array:
+    """Levy kernel. Minimum 0 at ``x = 1`` (all-ones), NOT the origin.
+
+    ``w = 1 + (x - 1)/4``; the CEC 2017 reference code applies no
+    shrink, so the shifted suite function's argmin is displaced
+    from the shift vector by the rotated all-ones point (handled
+    by the ``x_opt_from`` resolver in ``spec.py``).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    w = 1.0 + (x - 1.0) / 4.0
+    term1 = jnp.sin(jnp.pi * w[0]) ** 2
+    middle = jnp.sum(
+        (w[:-1] - 1.0) ** 2
+        * (1.0 + 10.0 * jnp.sin(jnp.pi * w[:-1] + 1.0) ** 2)
+    )
+    term3 = (w[-1] - 1.0) ** 2 * (1.0 + jnp.sin(2.0 * jnp.pi * w[-1]) ** 2)
+    return term1 + middle + term3
+
+
+def modified_schwefel(x: jax.Array) -> jax.Array:
+    """Modified Schwefel kernel. Minimum 0 at origin.
+
+    Ported branch-for-branch from ``schwefel_func`` in the
+    reference code: ``z = x + 420.9687...``, three regimes
+    (``|z| <= 500``, ``z > 500``, ``z < -500``) with an
+    out-of-range quadratic penalty scaled by ``1/(10000 D)``.
+    All branches are evaluated everywhere and selected with
+    ``jnp.where``; their values and gradients are finite for
+    finite inputs (epsilon-guarded square roots), so the
+    unselected branches contribute exact zeros to the gradient
+    and NaN inputs propagate through the selected branch.
+
+    Note
+    ----
+    The reference code's zero-offset literal ``418.98288...``
+    is replaced by evaluating the mid branch at the shift
+    constant in the input's dtype (the literal is exactly that
+    value in float64), so cancellation at the optimum is exact
+    at whichever precision JAX is configured for — the same
+    treatment as ``schwefel_xsinx`` in ``bbob.py``.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+
+    def mid(z: jax.Array) -> jax.Array:
+        return z * jnp.sin(jnp.sqrt(jnp.abs(z) + 1e-12))
+
+    z = x + 4.209687462275036e2
+    penalty_scale = 1.0 / (10000.0 * ndim)
+
+    g_mid = mid(z)
+    high_arg = 500.0 - jnp.mod(z, 500.0)
+    g_high = (
+        high_arg * jnp.sin(jnp.sqrt(high_arg + 1e-12))
+        - (z - 500.0) ** 2 * penalty_scale
+    )
+    low_arg = 500.0 - jnp.mod(jnp.abs(z), 500.0)
+    g_low = (
+        -low_arg * jnp.sin(jnp.sqrt(low_arg + 1e-12))
+        - (z + 500.0) ** 2 * penalty_scale
+    )
+
+    g = jnp.where(z > 500.0, g_high, jnp.where(z < -500.0, g_low, g_mid))
+    g_ref = mid(jnp.asarray(4.209687462275036e2, dtype=x.dtype))
+    return g_ref * ndim - jnp.sum(g)
+
+
+def high_conditioned_elliptic(x: jax.Array) -> jax.Array:
+    """High Conditioned Elliptic kernel. Minimum 0 at origin.
+
+    ``sum(10^(6i/(D-1)) * x_i^2)`` (0-based ``i``); the reference
+    divides by ``nx - 1``, which is undefined behavior at ``nx = 1``
+    — here the denominator is clamped to 1 (cf. ``cec2005.f3``).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+    exponents = jnp.arange(ndim, dtype=x.dtype) / max(ndim - 1, 1)
+    return jnp.sum(10.0 ** (6.0 * exponents) * jnp.square(x))
+
+
+def discus(x: jax.Array) -> jax.Array:
+    """Discus kernel. Minimum 0 at origin.
+
+    ``10^6 * x_1^2 + sum(x_i^2)`` — the counterpart of
+    ``cec_bent_cigar`` (not to be confused with the full BBOB
+    function ``discuss`` in ``bbob.py``).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    return 1e6 * x[0] ** 2 + jnp.sum(x[1:] ** 2)
+
+
+def expanded_schaffer_f6(x: jax.Array) -> jax.Array:
+    """Expanded Schaffer's F6 kernel. Minimum 0 at origin.
+
+    Chains :func:`scaffer_f6` over consecutive pairs with
+    wrap-around: ``g(x_1,x_2) + ... + g(x_{D-1},x_D) + g(x_D,x_1)``.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    return jnp.sum(scaffer_f6(x, jnp.roll(x, -1)))
+
+
+def expanded_griewank_rosenbrock(x: jax.Array) -> jax.Array:
+    """Expanded Griewank-plus-Rosenbrock kernel. Minimum 0 at origin.
+
+    Griewank applied to consecutive-pair Rosenbrock terms with
+    wrap-around, on ``w = x + 1`` (the reference code's "shift to
+    origin" re-centering).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    w = x + 1.0
+    w_next = jnp.roll(w, -1)
+    t = 100.0 * (w**2 - w_next) ** 2 + (w - 1.0) ** 2
+    return jnp.sum(t**2 / 4000.0 - jnp.cos(t) + 1.0)
+
+
+def hgbat(x: jax.Array) -> jax.Array:
+    """HGBat kernel (Hans-Georg Beyer). Minimum 0 at origin.
+
+    ``|r2^2 - s^2|^(1/2) + (0.5 r2 + s)/D + 0.5`` on ``z = x - 1``
+    (re-centered so the original all-minus-ones optimum lands at
+    the origin), with ``r2 = sum(z^2)``, ``s = sum(z)``. At the
+    optimum ``r2^2 - s^2 = 0`` exactly, where the half-power's
+    gradient is infinite — the guard ``sqrt(|v| + eps) - sqrt(eps)``
+    keeps the gradient finite, the optimum value exactly 0, and the
+    error elsewhere below ``sqrt(eps)``.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+    z = x - 1.0
+    r2 = jnp.sum(jnp.square(z))
+    s = jnp.sum(z)
+    v = jnp.abs(r2**2 - s**2)
+    root = jnp.sqrt(v + 1e-12) - jnp.sqrt(jnp.asarray(1e-12, dtype=x.dtype))
+    return root + (0.5 * r2 + s) / ndim + 0.5
+
+
+def happycat(x: jax.Array) -> jax.Array:
+    """HappyCat kernel (Hans-Georg Beyer). Minimum 0 at origin.
+
+    ``|r2 - D|^(1/4) + (0.5 r2 + s)/D + 0.5`` on ``z = x - 1``
+    (re-centered like :func:`hgbat`), with ``r2 = sum(z^2)``,
+    ``s = sum(z)``. At the optimum ``r2 - D = 0`` exactly, where
+    the quarter-power's gradient is infinite — the guard
+    ``(|v| + eps)^(1/4) - eps^(1/4)`` keeps the gradient finite,
+    the optimum value exactly 0, and the error elsewhere below
+    ``eps^(1/4)`` (~1e-6).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+    z = x - 1.0
+    r2 = jnp.sum(jnp.square(z))
+    s = jnp.sum(z)
+    v = jnp.abs(r2 - ndim)
+    eps = jnp.asarray(1e-24, dtype=x.dtype)
+    root = (v + eps) ** 0.25 - eps**0.25
+    return root + (0.5 * r2 + s) / ndim + 0.5
+
+
+def cec2017_katsuura(x: jax.Array) -> jax.Array:
+    """Katsuura kernel with CEC 2017 parameters. Minimum 0 at origin.
+
+    ``(10/D^2) * prod(1 + i * sum_j |2^j x_i - round(2^j x_i)|/2^j)
+    ^(10/D^1.2) - 10/D^2`` with ``j = 1..32``. Plain ``jnp.round``
+    (zero gradient) as in the BBOB ``katsuura``; the remaining terms
+    have well-defined gradients almost everywhere.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+    j_pow = 2.0 ** jnp.arange(1, 33, dtype=x.dtype)  # (32,)
+    scaled = j_pow[:, None] * x[None, :]  # (32, ndim)
+    frac_dist = jnp.abs(scaled - jnp.round(scaled)) / j_pow[:, None]
+    bracket = 1.0 + jnp.arange(1, ndim + 1, dtype=x.dtype) * jnp.sum(
+        frac_dist, axis=0
+    )
+    prod = jnp.prod(bracket) ** (10.0 / ndim**1.2)
+    scale = 10.0 / ndim**2
+    return cast(jax.Array, scale * prod - scale)
+
+
+#                                                  CEC 2017 hybrid partitioning
+# =============================================================================
+
+
+def cec2017_hybrid_partition(
+    ndim: int,
+    proportions: tuple[float, ...],
+    min_sizes: tuple[int, ...],
+) -> tuple[int, ...]:
+    """Split ``ndim`` into per-kernel chunk sizes for a hybrid function.
+
+    Primary rule is the reference code's: ``ceil(p_i * ndim)`` for
+    all but the last chunk (bit-identical to the C ``ceil`` since
+    Python floats are IEEE doubles), remainder to the last. At every
+    officially supported dimension (multiples of 10, where the
+    products are integral) this is an exact proportional split.
+
+    At other dimensions the ceil rule can violate ``min_sizes``
+    (e.g. a negative last chunk — undefined behavior in the
+    reference); there a largest-remainder split with ``min_sizes``
+    floors is used instead (quota ``p_i * ndim``, floor clamped to
+    ``min_sizes[i]``, leftovers by descending fractional remainder,
+    ties to the lowest index). ``min_sizes`` is 1 per kernel, or 2
+    for Schaffer F7 sub-kernels (undefined below two dimensions).
+
+    Parameters
+    ----------
+    ndim : int
+        Total number of dimensions to split.
+    proportions : tuple[float, ...]
+        Official per-kernel proportions (sum to 1).
+    min_sizes : tuple[int, ...]
+        Smallest admissible size per chunk.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Chunk sizes summing to ``ndim``.
+
+    Raises
+    ------
+    ValueError
+        If no admissible split exists (``ndim`` below the
+        function's ``min_ndim``).
+    """
+    n_kernels = len(proportions)
+    ceil_sizes = [math.ceil(p * ndim) for p in proportions[:-1]]
+    ceil_sizes.append(ndim - sum(ceil_sizes))
+    if all(s >= m for s, m in zip(ceil_sizes, min_sizes, strict=False)):
+        return tuple(ceil_sizes)
+
+    quotas = [p * ndim for p in proportions]
+    sizes = [
+        max(m, math.floor(q)) for m, q in zip(min_sizes, quotas, strict=False)
+    ]
+    remaining = ndim - sum(sizes)
+    if remaining < 0:
+        raise ValueError(
+            f"cannot split ndim={ndim} into {n_kernels} chunks with "
+            f"minimum sizes {min_sizes}"
+        )
+    order = sorted(
+        range(n_kernels),
+        key=lambda i: (-(quotas[i] - math.floor(quotas[i])), i),
+    )
+    while remaining > 0:
+        for i in order:
+            if remaining == 0:
+                break
+            sizes[i] += 1
+            remaining -= 1
+    if any(s < m for s, m in zip(sizes, min_sizes, strict=False)):
+        raise ValueError(
+            f"cannot split ndim={ndim} into {n_kernels} chunks with "
+            f"minimum sizes {min_sizes}"
+        )
+    return tuple(sizes)
+
+
+def cec2017_composition(
+    x: jax.Array,
+    x_opt: jax.Array,
+    deltas: tuple[float, ...],
+    biases: tuple[float, ...],
+    fits: jax.Array,
+) -> jax.Array:
+    """CEC 2017 composition weighting (``cf_cal`` in the reference).
+
+    ``w_i = exp(-d2_i / (2 D delta_i^2)) / sqrt(d2_i)`` with
+    ``d2_i = ||x - o_i||^2``; the value is the ``w``-weighted mean of
+    ``fits + biases``. Deviations from the reference, both
+    behavior-preserving:
+
+    - the reference substitutes ``INF = 1e99`` for the weight at
+      ``d2_i = 0``; here it is ``finfo(dtype).max * 1e-6`` so the
+      substitute dominates without overflowing under float32. Either
+      way the ratio collapses to that component's fitness.
+    - if every weight underflows to zero the reference falls back to
+      equal weights; replicated with a ``where`` on the weight sum.
+
+    NaN inputs propagate through ``fits`` (each component's fitness
+    is NaN) even where the weight ``where``-guards select finite
+    branch values. ``deltas``/``biases`` are plain tuples so import
+    order does not bake in a dtype (converted at call time).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+    x_opt : jax.Array
+        Stacked component shifts of shape ``(cf_num, ndim)``.
+    deltas : tuple[float, ...]
+        Per-component locality widths (sigma).
+    biases : tuple[float, ...]
+        Per-component value offsets.
+    fits : jax.Array
+        Stacked per-component fitness values (already
+        lambda-scaled), shape ``(cf_num,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar composition value.
+    """
+    cf_num = x_opt.shape[0]
+    ndim = x.shape[-1]
+    deltas_arr = jnp.asarray(deltas, dtype=x.dtype)
+    biases_arr = jnp.asarray(biases, dtype=x.dtype)
+
+    d2 = jnp.sum((x[None, :] - x_opt) ** 2, axis=-1)
+    big = jnp.finfo(x.dtype).max * 1e-6
+    safe_d2 = jnp.where(d2 > 0, d2, 1.0)
+    w = jnp.where(
+        d2 > 0,
+        jnp.exp(-d2 / (2.0 * ndim * deltas_arr**2)) / jnp.sqrt(safe_d2),
+        big,
+    )
+    w_sum = jnp.sum(w)
+    w_norm = jnp.where(
+        w_sum > 0, w / jnp.where(w_sum > 0, w_sum, 1.0), 1.0 / cf_num
+    )
+    return jnp.sum(w_norm * (fits + biases_arr))
+
+
+def hybrid_composition(
+    x: jax.Array,
+    fns: list,
+    sigma: jax.Array,
+    lambda_: jax.Array,
+    bias: jax.Array,
+    x_opt: jax.Array,
+    M: jax.Array,
+    C: float = 2000.0,
+    _f_max: jax.Array | None = None,
+) -> jax.Array:
+    """Hybrid composition kernel for CEC 2005 F15-F25.
+
+    Uses the CEC 2005 composition structure with a smooth
+    winner-take-all approximation so the public benchmark
+    functions remain compatible with ``jax.grad``.
+
+    Paper structure::
+
+        z = ((x - o_i) / lambda_i) * M_i
+        fit_i = f_i(z)
+        f_max_i = f_i((y / lambda_i) * M_i), y = [5,...,5]
+        fit_i = C * fit_i / f_max_i
+        F(x) = sum(w_i * [fit_i + bias_i])
+
+    ``fns`` is a Python list of base functions — always bound
+    as a Python constant at construction time, never a
+    JAX-traced argument. The Python loop over
+    ``num_components`` is unrolled at JIT trace time.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input point, shape ``(ndim,)``.
+    fns : list
+        Python list of ``num_components`` base functions.
+    sigma : jax.Array
+        Basin widths, shape ``(num_components,)``.
+    lambda_ : jax.Array
+        Per-component input stretch factors,
+        shape ``(num_components,)``.
+    bias : jax.Array
+        Per-component offsets ``[0, 100, ..., 900]``,
+        shape ``(num_components,)``.
+    x_opt : jax.Array
+        Component optima,
+        shape ``(num_components, ndim)``.
+    M : jax.Array
+        Per-component rotation matrices,
+        shape ``(num_components, ndim, ndim)``.
+    C : float, optional
+        Height normalization constant (default 2000).
+    _f_max : jax.Array or None, optional
+        Precomputed reference normalization values,
+        shape ``(num_components,)``. When provided,
+        skips per-call reference point evaluation.
+
+    Returns
+    -------
+    jax.Array
+        Scalar composed function value.
+    """
+    ndim = x.shape[-1]
+    num_components = len(fns)
+
+    # --- Weights (CEC 2005 winner-take-all scheme) ---
+    diffs = x[None, :] - x_opt
+    dist_sq = jnp.sum(diffs**2, axis=-1)
+    log_w = -dist_sq / (2.0 * ndim * sigma**2)
+    log_w_max = jax.lax.stop_gradient(jnp.max(log_w))
+    w = jnp.exp(log_w - log_w_max)
+    # SW = sum before suppression (paper divides by this)
+    sw = jnp.sum(w)
+    w_max = jax.lax.stop_gradient(jnp.max(w))
+    # Smooth max indicator for differentiability
+    is_max = jax.nn.softmax(1e4 * (w - w_max))
+    suppression = 1.0 - sj.clip_st(w_max, 0.0, 1.0) ** 10
+    w = w * (is_max + (1.0 - is_max) * suppression)
+    w = w / (sw + 1e-30)
+
+    # --- Evaluate each component ---
+    def component_value(i: int) -> jax.Array:
+        # z = ((x - o_i) / lambda_i) * M_i
+        z = M[i] @ ((x - x_opt[i]) / lambda_[i])
+        fit = _finite_like(fns[i](z))
+        # Height normalize: f_max = f_i((y / lambda_i) * M_i)
+        if _f_max is not None:
+            f_max = _f_max[i]
+        else:
+            y = 5.0 * jnp.ones(ndim)
+            z_ref = M[i] @ (y / lambda_[i])
+            f_max = sj.abs_st(_finite_like(fns[i](z_ref)))
+        use_norm = jnp.isfinite(f_max) & (f_max > 1e-30)
+        safe_f_max = sj.where(use_norm, f_max, 1.0)
+        fit = sj.where(use_norm, C * fit / safe_f_max, fit)
+        fit = _finite_like(fit)
+        return cast(jax.Array, fit + bias[i])
+
+    values = jnp.stack([component_value(i) for i in range(num_components)])
+    return jnp.sum(w * values)
+
+
+def compute_composition_f_max(
+    fns: list,
+    lambda_: jax.Array,
+    M: jax.Array,
+    ndim: int,
+) -> jax.Array:
+    """Precompute f_max normalization values.
+
+    Parameters
+    ----------
+    fns : list
+        Python list of base component functions.
+    lambda_ : jax.Array
+        Per-component stretch factors,
+        shape ``(num_components,)``.
+    M : jax.Array
+        Per-component rotation matrices,
+        shape ``(num_components, ndim, ndim)``.
+    ndim : int
+        Number of input dimensions.
+
+    Returns
+    -------
+    jax.Array
+        Reference values of shape ``(num_components,)``.
+    """
+    y = 5.0 * jnp.ones(ndim)
+    f_max_vals = []
+    for i in range(len(fns)):
+        z_ref = M[i] @ (y / lambda_[i])
+        f_max_vals.append(sj.abs_st(_finite_like(fns[i](z_ref))))
+    return jnp.stack(f_max_vals)

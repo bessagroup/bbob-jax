@@ -1,13 +1,19 @@
-"""Search-space bounds for BBOB and CEC 2005 benchmarks."""
+"""Search-space bounds for BBOB, CEC 2005 and CEC 2017 benchmarks.
+
+Derived from the :class:`~bbob_jax._src.spec.FunctionSpec`
+table in ``spec.py``.
+"""
 
 #                                                                       Modules
 # =============================================================================
 
-# Standard
-import math
-
 # Local
-from bbob_jax._src.registry import registry
+from bbob_jax._src.spec import (
+    BBOB_BOUNDS,
+    BBOB_SPECS,
+    CEC2005_SPECS,
+    CEC2017_SPECS,
+)
 
 #                                                          Authorship & Credits
 # =============================================================================
@@ -16,36 +22,16 @@ __credits__ = ["Martin van der Schelling"]
 __status__ = "Stable"
 # =============================================================================
 
-BBOB_BOUNDS: tuple[float, float] = (-5.0, 5.0)
+__all__ = ["BBOB_BOUNDS", "bbob_bounds", "cec2005_bounds", "cec2017_bounds"]
 
 bbob_bounds: dict[str, tuple[float, float]] = {
-    name: BBOB_BOUNDS for name in registry
+    s.name: s.bounds for s in BBOB_SPECS
 }
 
 cec2005_bounds: dict[str, tuple[float, float]] = {
-    "f1": (-100.0, 100.0),
-    "f2": (-100.0, 100.0),
-    "f3": (-100.0, 100.0),
-    "f4": (-100.0, 100.0),
-    "f5": (-100.0, 100.0),
-    "f6": (-100.0, 100.0),
-    "f7": (0.0, 600.0),
-    "f8": (-32.0, 32.0),
-    "f9": (-5.0, 5.0),
-    "f10": (-5.0, 5.0),
-    "f11": (-0.5, 0.5),
-    "f12": (-math.pi, math.pi),
-    "f13": (-3.0, 1.0),
-    "f14": (-100.0, 100.0),
-    "f15": (-5.0, 5.0),
-    "f16": (-5.0, 5.0),
-    "f17": (-5.0, 5.0),
-    "f18": (-5.0, 5.0),
-    "f19": (-5.0, 5.0),
-    "f20": (-5.0, 5.0),
-    "f21": (-5.0, 5.0),
-    "f22": (-5.0, 5.0),
-    "f23": (-5.0, 5.0),
-    "f24": (-5.0, 5.0),
-    "f25": (2.0, 5.0),
+    s.name: s.bounds for s in CEC2005_SPECS
+}
+
+cec2017_bounds: dict[str, tuple[float, float]] = {
+    s.name: s.bounds for s in CEC2017_SPECS
 }
