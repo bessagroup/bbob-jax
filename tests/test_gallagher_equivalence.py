@@ -15,7 +15,7 @@ import jax.random as jr
 import pytest
 
 import bbob_jax
-from bbob_jax._src.utils import penalty, tosz_func
+from bbob_jax._src.transforms import penalty, tosz_func
 
 GALLAGHER_PARAMS = {
     "gallagher_101_peaks": (101, 99, 1000.0, -5.0, 5.0),

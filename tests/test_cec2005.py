@@ -12,7 +12,7 @@ import pytest
 
 from bbob_jax import cec2005_registry, cec2005_registry_original
 from bbob_jax._src.cec2005_tags import cec2005_function_characteristics
-from bbob_jax._src.utils import _create_mesh
+from bbob_jax._src.mesh import _create_mesh
 
 _NOISY = {
     name

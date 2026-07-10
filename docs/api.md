@@ -1,5 +1,29 @@
 # API Reference
 
+## Problem Accessor
+
+One lookup for everything a benchmark consumer needs: the callable, the
+optimum location and value, the search-space bounds, the metadata tags and
+the noise arity.
+
+```python
+import jax.random as jr
+from bbob_jax import problem
+
+p = problem("rastrigin", ndim=2, key=jr.key(0))
+p.fn(p.x_opt)  # == p.f_opt
+p.bounds       # (-5.0, 5.0)
+p.tags         # {"separable": False, "unimodal": False}
+p.noisy        # False — noisy CEC functions are called as fn(x, key)
+```
+
+Pass `deterministic=True` for the zero-shift/identity-rotation instance
+(the `*_original` registries construct the same instances).
+
+::: bbob_jax.problem
+
+::: bbob_jax.Problem
+
 ## Function Registry
 
 Centralized access to the benchmark functions and their metadata.
@@ -31,7 +55,7 @@ Centralized access to the CEC 2005 benchmark functions and their metadata.
 
 - `bbob_jax.cec2005_registry`: Randomized variants of each CEC 2005 function. Parameters (shift vectors, rotation matrices) are generated from seeds rather than loaded from the official CEC 2005 data files — results will not match published CEC 2005 benchmarking results.
 - `bbob_jax.cec2005_registry_original`: Deterministic baseline variants (no random shift/rotation, no output offset). Useful for debugging and reference.
-- `bbob_jax.cec2005_function_characteristics`: Properties per function (unimodal/multimodal/composition/rotated flags, plus `noise_omitted` and `structure_modified` flags where the JAX implementation deviates from the official spec).
+- `bbob_jax.cec2005_function_characteristics`: Properties per function (unimodal/multimodal/composition/rotated flags, plus `noise` for the stochastic functions whose call signature is `fn(x, key)`, and `structure_modified` where the JAX implementation deviates from the official spec).
 
 ::: bbob_jax.cec2005_registry
 
@@ -43,7 +67,7 @@ Centralized access to the CEC 2005 benchmark functions and their metadata.
 
 Individual CEC 2005 benchmark function APIs (F1–F25). Access via the registries is recommended; the registry supplies internal parameters so the user-facing call is just `fn(x)`.
 
-> **Note:** Parameters are generated from seeds rather than loaded from the official CEC 2005 data files. Functions F4 and F17 have Gaussian noise omitted for `jax.grad` compatibility. Function F23 has its rounding step removed. See `cec2005_function_characteristics` for per-function flags.
+> **Note:** Parameters are generated from seeds rather than loaded from the official CEC 2005 data files. The stochastic functions (F4, F17, F24, F25) take a PRNG key as second argument: `fn(x, key)`. Functions F23–F25 replace the non-continuous rounding step with a smooth approximation (`structure_modified`). See `cec2005_function_characteristics` for per-function flags.
 
 ::: bbob_jax._src.cec2005.f1
 

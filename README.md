@@ -13,7 +13,7 @@ JAX implementations of the **BBOB** benchmark functions (Finck et al., 2009) [^1
 
 ## Summary
 
-`bbob-jax` is a pure-[JAX](https://github.com/jax-ml/jax) reimplementation of two standard black-box optimization benchmark suites: the 24 noise-free **BBOB** functions (Finck et al., 2009) and the 25 **CEC 2005** real-parameter functions (Suganthan et al., 2005). Every function is differentiable, JIT-compilable, and vectorizable via `vmap`, and is exposed through a simple registry that returns a ready-to-call objective together with its global minimum. Both randomized (shifted and rotated) and deterministic factory variants are provided, alongside per-function search-space bounds and metadata.
+`bbob-jax` is a pure-[JAX](https://github.com/jax-ml/jax) reimplementation of two standard black-box optimization benchmark suites: the 24 noise-free **BBOB** functions (Finck et al., 2009) and the 25 **CEC 2005** real-parameter functions (Suganthan et al., 2005). Every function is differentiable, JIT-compilable, and vectorizable via `vmap`, and is exposed through a simple registry that returns a ready-to-call objective together with its global minimum, as well as a `problem()` accessor that additionally bundles the optimum location, search-space bounds and metadata tags in one lookup. Both randomized (shifted and rotated) and deterministic factory variants are provided.
 
 ## Statement of need
 
