@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from bbob_jax import bbob_bounds, cec2005_bounds, registry
+from bbob_jax import bbob_bounds, cec2005_bounds, cec2017_bounds, registry
 from bbob_jax._src.bounds import BBOB_BOUNDS
 
 
@@ -33,6 +33,22 @@ def test_bounds_count():
 def test_no_key_overlap():
     """BBOB and CEC 2005 function names do not overlap."""
     assert set(bbob_bounds.keys()).isdisjoint(set(cec2005_bounds.keys()))
+
+
+def test_cec2017_bounds_keys():
+    """cec2017_bounds covers F1 and F3-F10 (F2 was withdrawn); the
+    hybrid and composition waves extend this set."""
+    assert set(cec2017_bounds.keys()) == {
+        f"cec2017_f{i}" for i in range(1, 11) if i != 2
+    }
+
+
+def test_cec2017_bounds_values():
+    """All CEC 2017 bounds are (-100.0, 100.0)."""
+    for name, bounds in cec2017_bounds.items():
+        assert bounds == (-100.0, 100.0), (
+            f"{name}: expected (-100.0, 100.0), got {bounds}"
+        )
 
 
 def test_constants():

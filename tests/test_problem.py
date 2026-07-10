@@ -18,6 +18,9 @@ from bbob_jax import (
     cec2005_bounds,
     cec2005_function_characteristics,
     cec2005_registry,
+    cec2017_bounds,
+    cec2017_function_characteristics,
+    cec2017_registry,
     function_characteristics,
     problem,
     registry,
@@ -25,6 +28,7 @@ from bbob_jax import (
 
 BBOB_NAMES = list(registry.keys())
 CEC_NAMES = list(cec2005_registry.keys())
+CEC2017_NAMES = list(cec2017_registry.keys())
 COMPOSITION_NAMES = [f"f{i}" for i in range(15, 26)]
 
 _NOISY = {
@@ -61,7 +65,7 @@ def test_missing_key_raises():
         problem("sphere", ndim=2)
 
 
-@pytest.mark.parametrize("name", BBOB_NAMES + CEC_NAMES)
+@pytest.mark.parametrize("name", BBOB_NAMES + CEC_NAMES + CEC2017_NAMES)
 def test_problem_fields_match_metadata_dicts(name):
     """Problem bundles the same facts the separate dicts expose."""
     p = problem(name, ndim=3, key=jr.key(0))
@@ -69,10 +73,15 @@ def test_problem_fields_match_metadata_dicts(name):
         assert p.bounds == bbob_bounds[name]
         assert p.tags == function_characteristics[name]
         assert p.noisy is False
-    else:
+    elif name in CEC_NAMES:
         assert p.bounds == cec2005_bounds[name]
         assert p.tags == cec2005_function_characteristics[name]
         assert p.noisy == cec2005_function_characteristics[name]["noise"]
+    else:
+        assert p.bounds == cec2017_bounds[name]
+        assert p.tags == cec2017_function_characteristics[name]
+        assert p.noisy is False
+        assert p.min_ndim >= 1
 
 
 @pytest.mark.parametrize("name", BBOB_NAMES)
@@ -159,3 +168,29 @@ def test_noisy_problems_take_key(name):
     assert p.noisy
     value = p.fn(jnp.zeros(3), jr.key(1))
     assert jnp.isfinite(value)
+
+
+@pytest.mark.parametrize("name", CEC2017_NAMES)
+@pytest.mark.parametrize("dim", [2, 5, 10])
+@pytest.mark.parametrize("deterministic", [False, True])
+def test_cec2017_global_minimum_at_x_opt(name, dim, deterministic):
+    """fn(x_opt) == f_opt for every CEC 2017 function, both modes.
+
+    The 1e-5 tolerance covers the epsilon guards inside the kernels'
+    square roots (F6's Schaffer F7 floor is ~1e-6); for ``cec2017_f9``
+    the resolver places x_opt at the rotated all-ones point, so this
+    also pins the Levy optimum-displacement handling.
+    """
+    p = problem(name, ndim=dim, key=jr.key(0), deterministic=deterministic)
+    result = p.fn(p.x_opt)
+    assert jnp.isclose(result, p.f_opt, atol=1e-5), (
+        f"{name} dim={dim} deterministic={deterministic}: "
+        f"fn(x_opt)={result}, f_opt={p.f_opt}, diff={result - p.f_opt}"
+    )
+
+
+def test_cec2017_min_ndim_surfaces_in_problem():
+    p = problem("cec2017_f6", ndim=2, key=jr.key(0))
+    assert p.min_ndim == 2
+    with pytest.raises(ValueError, match="ndim >= 2"):
+        problem("cec2017_f6", ndim=1, key=jr.key(0))

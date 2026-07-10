@@ -5,9 +5,10 @@ knows about one function: its implementation, the factory that
 constructs problem instances (randomized or deterministic),
 its metadata tags, its search-space bounds and where its true
 optimum lives. The public registries, tag dicts and bounds
-dicts in ``registry.py``, ``tags.py``, ``cec2005_tags.py`` and
-``bounds.py`` are all derived views of this table — adding a
-function means adding its implementation and one row here.
+dicts in ``registry.py``, ``tags.py``, ``cec2005_tags.py``,
+``cec2017_tags.py`` and ``bounds.py`` are all derived views of
+this table — adding a function means adding its implementation
+and one row here.
 """
 
 #                                                                       Modules
@@ -22,6 +23,8 @@ from typing import Any, NamedTuple, cast
 import jax
 import jax.numpy as jnp
 from jax.tree_util import Partial
+
+from bbob_jax._src import cec2017
 
 # Local
 from bbob_jax._src.bbob import (
@@ -98,6 +101,7 @@ from bbob_jax._src.factories import (
     make_bbob,
     make_cec2005,
     make_cec2005_conditioned,
+    make_cec2017,
 )
 
 #                                                          Authorship & Credits
@@ -158,6 +162,16 @@ def _griewank_rosenbrock_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
     )
 
 
+def _cec2017_levy_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
+    """cec2017_f9: the Levy kernel's minimum is at ``z = ones``.
+
+    ``z = R @ (x - x_opt)`` is all-ones at the minimum, so the
+    minimizer is ``x_opt + R.T @ ones`` — not the sampled shift,
+    matching the official reference code (see ``cec2017.f9``).
+    """
+    return cast(jax.Array, kw["x_opt"] + kw["R"].T @ jnp.ones(ndim))
+
+
 #                                                                  Tag schemas
 # =============================================================================
 
@@ -194,6 +208,36 @@ def _cec_tags(
     }
 
 
+def _cec2017_tags(
+    *,
+    unimodal: bool = False,
+    hybrid: bool = False,
+    composition: bool = False,
+    rotated: bool = True,
+    structure_modified: bool = False,
+) -> dict[str, bool]:
+    """CEC 2017 tag schema.
+
+    ``unimodal`` and ``multimodal`` are mutually exclusive;
+    ``hybrid`` marks F11-F20 (shuffled dimension chunks),
+    ``composition`` marks F21-F30; both imply multimodal.
+    There is no ``noise`` key — the suite has no stochastic
+    functions. ``rotated`` defaults to True (every function is
+    shifted and rotated except F6, whose rotation is dead code
+    in the official reference — see ``cec2017.f6``).
+    ``structure_modified`` marks deviations from the reference
+    code for JAX compatibility.
+    """
+    return {
+        "unimodal": unimodal,
+        "multimodal": not unimodal,
+        "hybrid": hybrid,
+        "composition": composition,
+        "rotated": rotated,
+        "structure_modified": structure_modified,
+    }
+
+
 #                                                                 FunctionSpec
 # =============================================================================
 
@@ -206,7 +250,8 @@ class FunctionSpec(NamedTuple):
     name : str
         Registry key of the function.
     suite : str
-        Benchmark suite, ``"bbob"`` or ``"cec2005"``.
+        Benchmark suite, ``"bbob"``, ``"cec2005"`` or
+        ``"cec2017"``.
     maker : Callable
         Factory constructing a problem instance. Called as
         ``maker(ndim=..., key=..., deterministic=...)`` and
@@ -218,6 +263,10 @@ class FunctionSpec(NamedTuple):
     x_opt_from : Callable
         Resolver mapping the constructed Partial's keyword dict
         (plus ``ndim``) to the location of the global minimum.
+    min_ndim : int
+        Smallest ``ndim`` the function is defined for. Makers
+        raise ``ValueError`` below it (e.g. CEC 2017 hybrids
+        need one dimension per subcomponent kernel).
     """
 
     name: str
@@ -226,6 +275,7 @@ class FunctionSpec(NamedTuple):
     tags: dict[str, bool]
     bounds: tuple[float, float]
     x_opt_from: Callable[[dict[str, Any], int], jax.Array] = _default_x_opt
+    min_ndim: int = 1
 
 
 #                                                                   BBOB table
@@ -877,10 +927,89 @@ CEC2005_SPECS: tuple[FunctionSpec, ...] = (
 )
 
 
+#                                                               CEC 2017 table
+# =============================================================================
+# F1-F10 (simple functions); the hybrids F11-F20 and compositions F21-F30
+# follow in later waves. F2 was officially withdrawn and is not implemented;
+# the numbering keeps the hole, matching the reference code and data files.
+
+CEC2017_BOUNDS: tuple[float, float] = (-100.0, 100.0)
+
+CEC2017_SPECS: tuple[FunctionSpec, ...] = (
+    FunctionSpec(
+        name="cec2017_f1",
+        suite="cec2017",
+        maker=Partial(make_cec2017, fn=cec2017.f1),
+        tags=_cec2017_tags(unimodal=True),
+        bounds=CEC2017_BOUNDS,
+    ),
+    FunctionSpec(
+        name="cec2017_f3",
+        suite="cec2017",
+        maker=Partial(make_cec2017, fn=cec2017.f3),
+        tags=_cec2017_tags(unimodal=True),
+        bounds=CEC2017_BOUNDS,
+    ),
+    FunctionSpec(
+        name="cec2017_f4",
+        suite="cec2017",
+        maker=Partial(make_cec2017, fn=cec2017.f4),
+        tags=_cec2017_tags(),
+        bounds=CEC2017_BOUNDS,
+    ),
+    FunctionSpec(
+        name="cec2017_f5",
+        suite="cec2017",
+        maker=Partial(make_cec2017, fn=cec2017.f5),
+        tags=_cec2017_tags(),
+        bounds=CEC2017_BOUNDS,
+    ),
+    FunctionSpec(
+        name="cec2017_f6",
+        suite="cec2017",
+        # Rotation is dead code in the official reference (see cec2017.f6),
+        # so the instance is shift-only: rotated=False.
+        maker=Partial(make_cec2017, fn=cec2017.f6, min_ndim=2),
+        tags=_cec2017_tags(rotated=False),
+        bounds=CEC2017_BOUNDS,
+        min_ndim=2,
+    ),
+    FunctionSpec(
+        name="cec2017_f7",
+        suite="cec2017",
+        maker=Partial(make_cec2017, fn=cec2017.f7),
+        tags=_cec2017_tags(),
+        bounds=CEC2017_BOUNDS,
+    ),
+    FunctionSpec(
+        name="cec2017_f8",
+        suite="cec2017",
+        maker=Partial(make_cec2017, fn=cec2017.f8),
+        tags=_cec2017_tags(),
+        bounds=CEC2017_BOUNDS,
+    ),
+    FunctionSpec(
+        name="cec2017_f9",
+        suite="cec2017",
+        maker=Partial(make_cec2017, fn=cec2017.f9),
+        tags=_cec2017_tags(),
+        bounds=CEC2017_BOUNDS,
+        x_opt_from=_cec2017_levy_x_opt,
+    ),
+    FunctionSpec(
+        name="cec2017_f10",
+        suite="cec2017",
+        maker=Partial(make_cec2017, fn=cec2017.f10),
+        tags=_cec2017_tags(),
+        bounds=CEC2017_BOUNDS,
+    ),
+)
+
+
 #                                                                Derived views
 # =============================================================================
 
-SPECS: tuple[FunctionSpec, ...] = BBOB_SPECS + CEC2005_SPECS
+SPECS: tuple[FunctionSpec, ...] = BBOB_SPECS + CEC2005_SPECS + CEC2017_SPECS
 SPEC_BY_NAME: dict[str, FunctionSpec] = {s.name: s for s in SPECS}
 
 if len(SPEC_BY_NAME) != len(SPECS):
