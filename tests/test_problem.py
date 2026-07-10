@@ -183,9 +183,11 @@ def test_cec2017_global_minimum_at_x_opt(name, dim, deterministic):
     the resolver places x_opt at the rotated all-ones point, so this
     also pins the Levy optimum-displacement handling.
     """
-    min_ndim = problem(name, ndim=20, key=jr.key(0)).min_ndim
-    if dim < min_ndim:
-        pytest.skip(f"{name} needs ndim >= {min_ndim}")
+    p20 = problem(name, ndim=20, key=jr.key(0))
+    if dim < p20.min_ndim:
+        pytest.skip(f"{name} needs ndim >= {p20.min_ndim}")
+    if deterministic and p20.tags["composition"]:
+        pytest.skip("Deterministic compositions are degenerate")
     p = problem(name, ndim=dim, key=jr.key(0), deterministic=deterministic)
     result = p.fn(p.x_opt)
     assert jnp.isclose(result, p.f_opt, atol=1e-5), (

@@ -25,6 +25,7 @@ application, with search range ``[-100, 100]^D`` and shifts sampled in
 """
 
 import math
+from collections.abc import Callable
 
 import jax
 import jax.numpy as jnp
@@ -32,6 +33,7 @@ import jax.numpy as jnp
 from bbob_jax._src.composition import (
     ackley,
     cec2005_weierstrass,
+    cec2017_composition,
     cec2017_hybrid_partition,
     cec2017_katsuura,
     cec_bent_cigar,
@@ -40,6 +42,8 @@ from bbob_jax._src.composition import (
     discus,
     expanded_griewank_rosenbrock,
     expanded_schaffer_f6,
+    griewank,
+    happycat,
     hgbat,
     high_conditioned_elliptic,
     levy,
@@ -932,5 +936,550 @@ def f20(
         + modified_schwefel(10.0 * c5)
         + schaffer_f7(y[: c6.shape[-1]])
         + 0.0 * jnp.sum(y)
+        + f_opt
+    )
+
+
+#                                                Composition functions F21-F30
+# =============================================================================
+# Shared structure (cf01-cf10 in the reference code): each component is a
+# full basic function with its own shift and rotation (F29/F30 compose full
+# hybrids, each with its own shuffle as well); component values are
+# lambda-scaled, offset by a bias and combined with the Gaussian locality
+# weights of :func:`cec2017_composition`. The global minimum sits at the
+# FIRST component's shift (bias 0); deterministic instances are degenerate
+# (all component shifts coincide at zero, so the weighting averages the
+# biases), exactly as for the deterministic CEC 2005 compositions.
+
+
+def _shifted_rotated(
+    kernel: Callable[[jax.Array], jax.Array],
+    sh_rate: float,
+    x: jax.Array,
+    o: jax.Array,
+    mat: jax.Array,
+) -> jax.Array:
+    """Evaluate a kernel on ``mat @ (sh_rate * (x - o))``."""
+    return kernel(mat @ (sh_rate * (x - o)))
+
+
+def f21(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+) -> jax.Array:
+    """Composition Function 1 (F21): Rosenbrock, Elliptic, Rastrigin.
+
+    N=3, sigmas (10, 20, 30), lambdas (1, 1e-6, 1), biases
+    (0, 100, 200).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Stacked component shifts of shape ``(3, ndim)``.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stacked rotation matrices of shape ``(3, ndim, ndim)``.
+    Q : jax.Array
+        Second rotation stack (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    fits = jnp.stack(
+        [
+            _shifted_rotated(cec_rosenbrock, 2.048 / 100.0, x, x_opt[0], R[0]),
+            1e-6
+            * _shifted_rotated(
+                high_conditioned_elliptic, 1.0, x, x_opt[1], R[1]
+            ),
+            _shifted_rotated(cec_rastrigin, 5.12 / 100.0, x, x_opt[2], R[2]),
+        ]
+    )
+    return (
+        cec2017_composition(
+            x, x_opt, (10.0, 20.0, 30.0), (0.0, 100.0, 200.0), fits
+        )
+        + f_opt
+    )
+
+
+def f22(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+) -> jax.Array:
+    """Composition Function 2 (F22): Rastrigin, Griewank, Modified
+    Schwefel.
+
+    N=3, sigmas (10, 20, 30), lambdas (1, 10, 1), biases
+    (0, 100, 200).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Stacked component shifts of shape ``(3, ndim)``.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stacked rotation matrices of shape ``(3, ndim, ndim)``.
+    Q : jax.Array
+        Second rotation stack (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    fits = jnp.stack(
+        [
+            _shifted_rotated(cec_rastrigin, 5.12 / 100.0, x, x_opt[0], R[0]),
+            10.0 * _shifted_rotated(griewank, 6.0, x, x_opt[1], R[1]),
+            _shifted_rotated(modified_schwefel, 10.0, x, x_opt[2], R[2]),
+        ]
+    )
+    return (
+        cec2017_composition(
+            x, x_opt, (10.0, 20.0, 30.0), (0.0, 100.0, 200.0), fits
+        )
+        + f_opt
+    )
+
+
+def f23(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+) -> jax.Array:
+    """Composition Function 3 (F23): Rosenbrock, Ackley, Modified
+    Schwefel, Rastrigin.
+
+    N=4, sigmas (10, 20, 30, 40), lambdas (1, 10, 1, 1), biases
+    (0, 100, 200, 300).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Stacked component shifts of shape ``(4, ndim)``.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stacked rotation matrices of shape ``(4, ndim, ndim)``.
+    Q : jax.Array
+        Second rotation stack (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    fits = jnp.stack(
+        [
+            _shifted_rotated(cec_rosenbrock, 2.048 / 100.0, x, x_opt[0], R[0]),
+            10.0 * _shifted_rotated(ackley, 1.0, x, x_opt[1], R[1]),
+            _shifted_rotated(modified_schwefel, 10.0, x, x_opt[2], R[2]),
+            _shifted_rotated(cec_rastrigin, 5.12 / 100.0, x, x_opt[3], R[3]),
+        ]
+    )
+    return (
+        cec2017_composition(
+            x,
+            x_opt,
+            (10.0, 20.0, 30.0, 40.0),
+            (0.0, 100.0, 200.0, 300.0),
+            fits,
+        )
+        + f_opt
+    )
+
+
+def f24(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+) -> jax.Array:
+    """Composition Function 4 (F24): Ackley, Elliptic, Griewank,
+    Rastrigin.
+
+    N=4, sigmas (10, 20, 30, 40), lambdas (10, 1e-6, 10, 1), biases
+    (0, 100, 200, 300).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Stacked component shifts of shape ``(4, ndim)``.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stacked rotation matrices of shape ``(4, ndim, ndim)``.
+    Q : jax.Array
+        Second rotation stack (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    fits = jnp.stack(
+        [
+            10.0 * _shifted_rotated(ackley, 1.0, x, x_opt[0], R[0]),
+            1e-6
+            * _shifted_rotated(
+                high_conditioned_elliptic, 1.0, x, x_opt[1], R[1]
+            ),
+            10.0 * _shifted_rotated(griewank, 6.0, x, x_opt[2], R[2]),
+            _shifted_rotated(cec_rastrigin, 5.12 / 100.0, x, x_opt[3], R[3]),
+        ]
+    )
+    return (
+        cec2017_composition(
+            x,
+            x_opt,
+            (10.0, 20.0, 30.0, 40.0),
+            (0.0, 100.0, 200.0, 300.0),
+            fits,
+        )
+        + f_opt
+    )
+
+
+def f25(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+) -> jax.Array:
+    """Composition Function 5 (F25): Rastrigin, HappyCat, Ackley,
+    Discus, Rosenbrock.
+
+    N=5, sigmas (10, 20, 30, 40, 50), lambdas (10, 1, 10, 1e-6, 1),
+    biases (0, 100, 200, 300, 400).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Stacked component shifts of shape ``(5, ndim)``.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stacked rotation matrices of shape ``(5, ndim, ndim)``.
+    Q : jax.Array
+        Second rotation stack (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    fits = jnp.stack(
+        [
+            10.0
+            * _shifted_rotated(cec_rastrigin, 5.12 / 100.0, x, x_opt[0], R[0]),
+            _shifted_rotated(happycat, 5.0 / 100.0, x, x_opt[1], R[1]),
+            10.0 * _shifted_rotated(ackley, 1.0, x, x_opt[2], R[2]),
+            1e-6 * _shifted_rotated(discus, 1.0, x, x_opt[3], R[3]),
+            _shifted_rotated(cec_rosenbrock, 2.048 / 100.0, x, x_opt[4], R[4]),
+        ]
+    )
+    return (
+        cec2017_composition(
+            x,
+            x_opt,
+            (10.0, 20.0, 30.0, 40.0, 50.0),
+            (0.0, 100.0, 200.0, 300.0, 400.0),
+            fits,
+        )
+        + f_opt
+    )
+
+
+def f26(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+) -> jax.Array:
+    """Composition Function 6 (F26): Expanded Schaffer F6, Modified
+    Schwefel, Griewank, Rosenbrock, Rastrigin.
+
+    N=5, sigmas (10, 20, 20, 30, 40), lambdas (5e-4, 1, 10, 1, 10),
+    biases (0, 100, 200, 300, 400).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Stacked component shifts of shape ``(5, ndim)``.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stacked rotation matrices of shape ``(5, ndim, ndim)``.
+    Q : jax.Array
+        Second rotation stack (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    fits = jnp.stack(
+        [
+            5e-4
+            * _shifted_rotated(expanded_schaffer_f6, 1.0, x, x_opt[0], R[0]),
+            _shifted_rotated(modified_schwefel, 10.0, x, x_opt[1], R[1]),
+            10.0 * _shifted_rotated(griewank, 6.0, x, x_opt[2], R[2]),
+            _shifted_rotated(cec_rosenbrock, 2.048 / 100.0, x, x_opt[3], R[3]),
+            10.0
+            * _shifted_rotated(cec_rastrigin, 5.12 / 100.0, x, x_opt[4], R[4]),
+        ]
+    )
+    return (
+        cec2017_composition(
+            x,
+            x_opt,
+            (10.0, 20.0, 20.0, 30.0, 40.0),
+            (0.0, 100.0, 200.0, 300.0, 400.0),
+            fits,
+        )
+        + f_opt
+    )
+
+
+def f27(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+) -> jax.Array:
+    """Composition Function 7 (F27): HGBat, Rastrigin, Modified
+    Schwefel, Bent Cigar, Elliptic, Expanded Schaffer F6.
+
+    N=6, sigmas (10, 20, 30, 40, 50, 60), lambdas
+    (10, 10, 2.5, 1e-26, 1e-6, 5e-4), biases (0, 100, ..., 500).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Stacked component shifts of shape ``(6, ndim)``.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stacked rotation matrices of shape ``(6, ndim, ndim)``.
+    Q : jax.Array
+        Second rotation stack (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    fits = jnp.stack(
+        [
+            10.0 * _shifted_rotated(hgbat, 5.0 / 100.0, x, x_opt[0], R[0]),
+            10.0
+            * _shifted_rotated(cec_rastrigin, 5.12 / 100.0, x, x_opt[1], R[1]),
+            2.5 * _shifted_rotated(modified_schwefel, 10.0, x, x_opt[2], R[2]),
+            1e-26 * _shifted_rotated(cec_bent_cigar, 1.0, x, x_opt[3], R[3]),
+            1e-6
+            * _shifted_rotated(
+                high_conditioned_elliptic, 1.0, x, x_opt[4], R[4]
+            ),
+            5e-4
+            * _shifted_rotated(expanded_schaffer_f6, 1.0, x, x_opt[5], R[5]),
+        ]
+    )
+    return (
+        cec2017_composition(
+            x,
+            x_opt,
+            (10.0, 20.0, 30.0, 40.0, 50.0, 60.0),
+            (0.0, 100.0, 200.0, 300.0, 400.0, 500.0),
+            fits,
+        )
+        + f_opt
+    )
+
+
+def f28(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+) -> jax.Array:
+    """Composition Function 8 (F28): Ackley, Griewank, Discus,
+    Rosenbrock, HappyCat, Expanded Schaffer F6.
+
+    N=6, sigmas (10, 20, 30, 40, 50, 60), lambdas
+    (10, 10, 1e-6, 1, 1, 5e-4), biases (0, 100, ..., 500).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Stacked component shifts of shape ``(6, ndim)``.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stacked rotation matrices of shape ``(6, ndim, ndim)``.
+    Q : jax.Array
+        Second rotation stack (unused).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    fits = jnp.stack(
+        [
+            10.0 * _shifted_rotated(ackley, 1.0, x, x_opt[0], R[0]),
+            10.0 * _shifted_rotated(griewank, 6.0, x, x_opt[1], R[1]),
+            1e-6 * _shifted_rotated(discus, 1.0, x, x_opt[2], R[2]),
+            _shifted_rotated(cec_rosenbrock, 2.048 / 100.0, x, x_opt[3], R[3]),
+            _shifted_rotated(happycat, 5.0 / 100.0, x, x_opt[4], R[4]),
+            5e-4
+            * _shifted_rotated(expanded_schaffer_f6, 1.0, x, x_opt[5], R[5]),
+        ]
+    )
+    return (
+        cec2017_composition(
+            x,
+            x_opt,
+            (10.0, 20.0, 30.0, 40.0, 50.0, 60.0),
+            (0.0, 100.0, 200.0, 300.0, 400.0, 500.0),
+            fits,
+        )
+        + f_opt
+    )
+
+
+def f29(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    _shuffle: jax.Array,
+) -> jax.Array:
+    """Composition Function 9 (F29): Hybrid 5 (F15), Hybrid 6 (F16),
+    Hybrid 7 (F17) as components.
+
+    N=3, sigmas (10, 30, 50), lambdas (1, 1, 1), biases (0, 100, 200).
+    Each component is a full hybrid with its own shift, rotation and
+    shuffle; needs ``ndim >= 5`` (the largest component hybrid
+    minimum). Inherits the hybrids' reference quirks.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Stacked component shifts of shape ``(3, ndim)``.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stacked rotation matrices of shape ``(3, ndim, ndim)``.
+    Q : jax.Array
+        Second rotation stack (unused).
+    _shuffle : jax.Array
+        Stacked dimension permutations of shape ``(3, ndim)``.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    zero = jnp.zeros((), dtype=x.dtype)
+    fits = jnp.stack(
+        [
+            f15(x, x_opt[0], zero, R[0], R[0], _shuffle[0]),
+            f16(x, x_opt[1], zero, R[1], R[1], _shuffle[1]),
+            f17(x, x_opt[2], zero, R[2], R[2], _shuffle[2]),
+        ]
+    )
+    return (
+        cec2017_composition(
+            x, x_opt, (10.0, 30.0, 50.0), (0.0, 100.0, 200.0), fits
+        )
+        + f_opt
+    )
+
+
+def f30(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    _shuffle: jax.Array,
+) -> jax.Array:
+    """Composition Function 10 (F30): Hybrid 5 (F15), Hybrid 8 (F18),
+    Hybrid 9 (F19) as components.
+
+    N=3, sigmas (10, 30, 50), lambdas (1, 1, 1), biases (0, 100, 200).
+    Each component is a full hybrid with its own shift, rotation and
+    shuffle; needs ``ndim >= 5`` (the largest component hybrid
+    minimum). Inherits the hybrids' reference quirks.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Stacked component shifts of shape ``(3, ndim)``.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stacked rotation matrices of shape ``(3, ndim, ndim)``.
+    Q : jax.Array
+        Second rotation stack (unused).
+    _shuffle : jax.Array
+        Stacked dimension permutations of shape ``(3, ndim)``.
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    zero = jnp.zeros((), dtype=x.dtype)
+    fits = jnp.stack(
+        [
+            f15(x, x_opt[0], zero, R[0], R[0], _shuffle[0]),
+            f18(x, x_opt[1], zero, R[1], R[1], _shuffle[1]),
+            f19(x, x_opt[2], zero, R[2], R[2], _shuffle[2]),
+        ]
+    )
+    return (
+        cec2017_composition(
+            x, x_opt, (10.0, 30.0, 50.0), (0.0, 100.0, 200.0), fits
+        )
         + f_opt
     )

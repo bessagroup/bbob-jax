@@ -102,6 +102,7 @@ from bbob_jax._src.factories import (
     make_cec2005,
     make_cec2005_conditioned,
     make_cec2017,
+    make_cec2017_composition,
     make_cec2017_hybrid,
 )
 
@@ -1089,6 +1090,120 @@ CEC2017_SPECS: tuple[FunctionSpec, ...] = (
         tags=_cec2017_tags(hybrid=True),
         bounds=CEC2017_BOUNDS,
         min_ndim=7,
+    ),
+    # Compositions F21-F30: the global minimum is the first component's
+    # shift; deterministic instances are degenerate (same caveat as the
+    # deterministic CEC 2005 compositions). F29/F30 compose full hybrids
+    # and inherit the largest component hybrid's min_ndim.
+    FunctionSpec(
+        name="cec2017_f21",
+        suite="cec2017",
+        maker=Partial(
+            make_cec2017_composition, fn=cec2017.f21, num_components=3
+        ),
+        tags=_cec2017_tags(composition=True),
+        bounds=CEC2017_BOUNDS,
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="cec2017_f22",
+        suite="cec2017",
+        maker=Partial(
+            make_cec2017_composition, fn=cec2017.f22, num_components=3
+        ),
+        tags=_cec2017_tags(composition=True),
+        bounds=CEC2017_BOUNDS,
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="cec2017_f23",
+        suite="cec2017",
+        maker=Partial(
+            make_cec2017_composition, fn=cec2017.f23, num_components=4
+        ),
+        tags=_cec2017_tags(composition=True),
+        bounds=CEC2017_BOUNDS,
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="cec2017_f24",
+        suite="cec2017",
+        maker=Partial(
+            make_cec2017_composition, fn=cec2017.f24, num_components=4
+        ),
+        tags=_cec2017_tags(composition=True),
+        bounds=CEC2017_BOUNDS,
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="cec2017_f25",
+        suite="cec2017",
+        maker=Partial(
+            make_cec2017_composition, fn=cec2017.f25, num_components=5
+        ),
+        tags=_cec2017_tags(composition=True),
+        bounds=CEC2017_BOUNDS,
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="cec2017_f26",
+        suite="cec2017",
+        maker=Partial(
+            make_cec2017_composition, fn=cec2017.f26, num_components=5
+        ),
+        tags=_cec2017_tags(composition=True),
+        bounds=CEC2017_BOUNDS,
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="cec2017_f27",
+        suite="cec2017",
+        maker=Partial(
+            make_cec2017_composition, fn=cec2017.f27, num_components=6
+        ),
+        tags=_cec2017_tags(composition=True),
+        bounds=CEC2017_BOUNDS,
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="cec2017_f28",
+        suite="cec2017",
+        maker=Partial(
+            make_cec2017_composition, fn=cec2017.f28, num_components=6
+        ),
+        tags=_cec2017_tags(composition=True),
+        bounds=CEC2017_BOUNDS,
+        x_opt_from=_first_component_x_opt,
+    ),
+    FunctionSpec(
+        name="cec2017_f29",
+        suite="cec2017",
+        maker=Partial(
+            make_cec2017_composition,
+            fn=cec2017.f29,
+            num_components=3,
+            with_shuffles=True,
+            min_ndim=5,
+        ),
+        tags=_cec2017_tags(composition=True),
+        bounds=CEC2017_BOUNDS,
+        x_opt_from=_first_component_x_opt,
+        min_ndim=5,
+    ),
+    FunctionSpec(
+        name="cec2017_f30",
+        suite="cec2017",
+        maker=Partial(
+            make_cec2017_composition,
+            fn=cec2017.f30,
+            num_components=3,
+            with_shuffles=True,
+            min_ndim=5,
+        ),
+        tags=_cec2017_tags(composition=True),
+        bounds=CEC2017_BOUNDS,
+        x_opt_from=_first_component_x_opt,
+        min_ndim=5,
     ),
 )
 

@@ -5,7 +5,7 @@
 | [**Documentation**](https://bbob-jax.readthedocs.io/)
 | [**Zenodo**](https://doi.org/10.5281/zenodo.17426894) 
 
-JAX implementations of the **BBOB** benchmark functions (Finck et al., 2009) [^1] and the **CEC 2005** benchmark functions (Suganthan et al., 2005) [^4] for black-box optimization.
+JAX implementations of the **BBOB** benchmark functions (Finck et al., 2009) [^1], the **CEC 2005** benchmark functions (Suganthan et al., 2005) [^4] and the **CEC 2017** benchmark functions (Awad et al., 2016) [^5] for black-box optimization.
 
 **First publication:** October 17, 2025
 
@@ -13,11 +13,11 @@ JAX implementations of the **BBOB** benchmark functions (Finck et al., 2009) [^1
 
 ## Summary
 
-`bbob-jax` is a pure-[JAX](https://github.com/jax-ml/jax) reimplementation of two standard black-box optimization benchmark suites: the 24 noise-free **BBOB** functions (Finck et al., 2009) and the 25 **CEC 2005** real-parameter functions (Suganthan et al., 2005). Every function is differentiable, JIT-compilable, and vectorizable via `vmap`, and is exposed through a simple registry that returns a ready-to-call objective together with its global minimum, as well as a `problem()` accessor that additionally bundles the optimum location, search-space bounds and metadata tags in one lookup. Both randomized (shifted and rotated) and deterministic factory variants are provided.
+`bbob-jax` is a pure-[JAX](https://github.com/jax-ml/jax) reimplementation of three standard black-box optimization benchmark suites: the 24 noise-free **BBOB** functions (Finck et al., 2009), the 25 **CEC 2005** real-parameter functions (Suganthan et al., 2005) and the 29 **CEC 2017** bound-constrained functions (Awad et al., 2016; F2 was officially withdrawn). Every function is differentiable, JIT-compilable, and vectorizable via `vmap`, and is exposed through a simple registry that returns a ready-to-call objective together with its global minimum, as well as a `problem()` accessor that additionally bundles the optimum location, search-space bounds and metadata tags in one lookup. Both randomized (shifted and rotated) and deterministic factory variants are provided.
 
 ## Statement of need
 
-The BBOB and CEC 2005 benchmark suites are cornerstones of black-box optimization research. This repository provides JAX reimplementations of both: the 24 BBOB noise-free functions originally written in C, and the 25 CEC 2005 real-parameter functions. Translating these suites to JAX enables automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance — making them ideal for research in optimization, machine learning, and evolutionary algorithms.
+The BBOB and CEC benchmark suites are cornerstones of black-box optimization research. This repository provides JAX reimplementations of all three: the 24 BBOB noise-free functions originally written in C, the 25 CEC 2005 real-parameter functions, and the 29 CEC 2017 bound-constrained functions (simple, hybrid and composition). Translating these suites to JAX enables automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance — making them ideal for research in optimization, machine learning, and evolutionary algorithms.
 
 <div align="center">
   <img src="img/bbob_functions_overview_3d.png" alt="BBOB functions 3D overview" width="80%">
@@ -35,6 +35,16 @@ The BBOB and CEC 2005 benchmark suites are cornerstones of black-box optimizatio
   <img src="img/cec2005_functions_overview_2d.png" alt="CEC 2005 functions 2D overview" width="80%">
   <br>
   <em>2D contour plots of the 25 CEC 2005 benchmark functions.</em>
+  <br><br>
+  <img src="img/cec2017_functions_overview_3d.png" alt="CEC 2017 functions 3D overview" width="80%">
+  <br>
+  <em>3D surface plots of the 29 CEC 2017 benchmark functions.</em>
+  <br><br>
+  <img src="img/cec2017_functions_overview_2d.png" alt="CEC 2017 functions 2D overview" width="80%">
+  <br>
+  <em>2D contour plots of the 29 CEC 2017 benchmark functions. Panels marked
+  "(2D slice of nD)" show a 2D slice through the optimum plane of functions
+  only defined from n dimensions up.</em>
 </div>
 
 ## Authorship & Citation
@@ -111,6 +121,8 @@ This project is licensed under the BSD 3-Clause License. See [LICENSE](https://g
 
 [^4]: Suganthan, P. N., Hansen, N., Liang, J. J., and Deb, K. (2005), Problem Definitions and Evaluation Criteria for the CEC 2005 Special Session on Real-Parameter Optimization.
 
+[^5]: Awad, N. H., Ali, M. Z., Liang, J. J., Qu, B. Y., and Suganthan, P. N. (2016), Problem Definitions and Evaluation Criteria for the CEC 2017 Special Session and Competition on Single Objective Real-Parameter Numerical Optimization.
+
 ## Related repositories
 
 `bbob-jax` provides the benchmark functions used across the L2CO ecosystem developed in the [Bessa Research Group](https://github.com/bessagroup). The repositories below work together:
@@ -120,5 +132,5 @@ This project is licensed under the BSD 3-Clause License. See [LICENSE](https://g
 - [l2co-tasks](https://github.com/bessagroup/l2co-tasks) — Optimization task definitions (BBOB, CEC 2005, PDE, spiral, …) compatible with the L2CO library.
 - [l2co_experiments](https://github.com/bessagroup/l2co_experiments) — Hydra + f3dasm experiment pipelines (dataset creation, training, rollouts, figures) for the L2CO studies.
 - [agentic-l2co](https://github.com/bessagroup/agentic-l2co) — An LLM-agent drop-in replacement for `l2co.L2COModel`, driving two-stage optimizer selection with an Ollama-hosted LLM.
-- [bbob-jax](https://github.com/bessagroup/bbob-jax) — JAX implementations of the BBOB and CEC 2005 black-box optimization benchmark functions.
+- [bbob-jax](https://github.com/bessagroup/bbob-jax) — JAX implementations of the BBOB, CEC 2005 and CEC 2017 black-box optimization benchmark functions.
 - [f3dasm](https://github.com/bessagroup/f3dasm) — Framework for Data-Driven Design and Analysis of Structures and Materials; provides `ExperimentData`, pipelines, and SLURM orchestration.
