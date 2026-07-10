@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`bbob-jax` is a JAX implementation of the 24 BBOB (Black-Box Optimization Benchmark) noise-free functions, the 25 CEC 2005 benchmark functions, and the CEC 2017 bound-constrained suite (in progress: F1, F3–F10 landed; hybrids F11–F20 and compositions F21–F30 follow; F2 was officially withdrawn and is skipped). The key value-add over the original C implementations is full JAX compatibility: automatic differentiation, JIT compilation, and vectorization via `vmap`.
+`bbob-jax` is a JAX implementation of the 24 BBOB (Black-Box Optimization Benchmark) noise-free functions, the 25 CEC 2005 benchmark functions, and the CEC 2017 bound-constrained suite (in progress: F1, F3–F20 landed; compositions F21–F30 follow; F2 was officially withdrawn and is skipped). The key value-add over the original C implementations is full JAX compatibility: automatic differentiation, JIT compilation, and vectorization via `vmap`.
 
 ## Commands
 
@@ -68,8 +68,9 @@ p.fn, p.x_opt, p.f_opt, p.bounds, p.tags, p.noisy
 deterministic CEC compositions are degenerate). Noisy CEC functions
 (`noise` tag) are called as `fn(x, key)`. `Problem.min_ndim` is the
 smallest supported dimension (default 1); makers raise `ValueError` below
-it (e.g. `cec2017_f6` needs `ndim >= 2`, CEC 2017 hybrids will need one
-dimension per subcomponent kernel).
+it (e.g. `cec2017_f6` needs `ndim >= 2`; CEC 2017 hybrids need one
+dimension per subcomponent kernel and up to 7 where the chunk split
+demands it — see `cec2017_hybrid_partition`).
 
 ### Core Function Signature
 

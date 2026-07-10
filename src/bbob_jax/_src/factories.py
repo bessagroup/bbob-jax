@@ -464,6 +464,84 @@ def make_cec2017(
     )
 
 
+def make_cec2017_hybrid(
+    fn: Callable,
+    ndim: int,
+    key: PRNGKeyArray | None = None,
+    min_ndim: int = 1,
+    deterministic: bool = False,
+) -> BBOBFn:
+    """Factory for CEC 2017 hybrid functions (F11-F20).
+
+    Beyond the shift (sampled in ``[-80, 80]^D``), rotations and
+    ``f_opt``, hybrids carry a dimension permutation bound as
+    ``_shuffle`` (the official suite ships shuffle data files;
+    here it is sampled from the key). ``deterministic=True``
+    uses the identity permutation alongside zero shift, identity
+    rotations and zero ``f_opt``.
+
+    Parameters
+    ----------
+    fn : Callable
+        Base CEC 2017 hybrid function.
+    ndim : int
+        Number of input dimensions.
+    key : PRNGKeyArray or None, optional
+        JAX random key. Required when ``deterministic`` is
+        False; ignored otherwise.
+    min_ndim : int, optional
+        Smallest ``ndim`` the hybrid is defined for (at least
+        one dimension per subcomponent kernel; more when the
+        chunk split demands it — see
+        ``cec2017_hybrid_partition``).
+    deterministic : bool, optional
+        When True, use zero shift, identity rotations, identity
+        shuffle and zero ``f_opt`` instead of sampling.
+
+    Returns
+    -------
+    BBOBFn
+        Tuple of (partial function, optimal value).
+
+    Raises
+    ------
+    ValueError
+        If ``ndim < min_ndim``.
+    """
+    if ndim < min_ndim:
+        raise ValueError(
+            f"{getattr(fn, '__name__', fn)} requires ndim >= {min_ndim}, "
+            f"got {ndim}"
+        )
+    if deterministic:
+        f_opt_val = jnp.array(0.0)
+        eye = jnp.eye(ndim)
+        return (
+            Partial(
+                fn,
+                x_opt=jnp.zeros(ndim),
+                f_opt=f_opt_val,
+                R=eye,
+                Q=eye,
+                _shuffle=jnp.arange(ndim),
+            ),
+            f_opt_val,
+        )
+    if key is None:
+        raise ValueError("key is required when deterministic=False")
+
+    key_r, key_q, key_s, key_x, key_f = jr.split(key, 5)
+    x_opt = xopt(key=key_x, ndim=ndim, minval=-80.0, maxval=80.0)
+    R = rotation_matrix(ndim, key_r)
+    Q = rotation_matrix(ndim, key_q)
+    shuffle = jr.permutation(key_s, ndim)
+    f_opt_val = fopt(key_f)
+    return (
+        Partial(fn, x_opt=x_opt, f_opt=f_opt_val, R=R, Q=Q, _shuffle=shuffle),
+        f_opt_val,
+    )
+
+
 def make_cec2005_conditioned(
     fn: Callable,
     ndim: int,

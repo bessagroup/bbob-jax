@@ -30,9 +30,18 @@ import jax
 import jax.numpy as jnp
 
 from bbob_jax._src.composition import (
+    ackley,
+    cec2005_weierstrass,
+    cec2017_hybrid_partition,
+    cec2017_katsuura,
     cec_bent_cigar,
     cec_rastrigin,
     cec_rosenbrock,
+    discus,
+    expanded_griewank_rosenbrock,
+    expanded_schaffer_f6,
+    hgbat,
+    high_conditioned_elliptic,
     levy,
     modified_schwefel,
     schaffer_f7,
@@ -391,3 +400,537 @@ def f10(
     """
     z = R @ (10.0 * (x - x_opt))
     return modified_schwefel(z) + f_opt
+
+
+#                                                     Hybrid functions F11-F20
+# =============================================================================
+# Shared structure (hf01-hf10 in the reference code): the whole input is
+# shifted, rotated and then SHUFFLED (``y = (R @ (x - x_opt))[shuffle]``),
+# split into contiguous chunks by the official proportions, and each chunk
+# is fed to one kernel with a kernel-specific shrink rate. Chunk sizes come
+# from :func:`cec2017_hybrid_partition` (the reference ceil rule wherever it
+# is well-defined). The trailing ``0.0 * jnp.sum(y)`` term is an exact zero
+# for finite inputs and exists solely to propagate NaN through coordinates
+# a hybrid ignores (single-coordinate Rosenbrock chunks have an empty sum;
+# the Schaffer F7 sub-kernel reads the wrong coordinates entirely — see
+# ``f14``/``f20``).
+
+
+def _hybrid_chunks(
+    y: jax.Array,
+    proportions: tuple[float, ...],
+    min_sizes: tuple[int, ...],
+) -> list[jax.Array]:
+    """Split the shuffled vector into per-kernel chunks."""
+    sizes = cec2017_hybrid_partition(y.shape[-1], proportions, min_sizes)
+    chunks = []
+    start = 0
+    for size in sizes:
+        chunks.append(y[start : start + size])
+        start += size
+    return chunks
+
+
+def _hybrid_lunacek(chunk: jax.Array, shift_prefix: jax.Array) -> jax.Array:
+    """Lunacek Bi-Rastrigin as a hybrid sub-kernel (``bi_rastrigin_func``
+    with ``s_flag = r_flag = 0``).
+
+    The sign flip reads the LEADING entries of the hybrid's full,
+    unshuffled shift vector — not the shift belonging to this chunk's
+    coordinates. That is what the reference code's global-buffer
+    aliasing computes, and what all published results used; replicated
+    faithfully. No rotation is applied to the cosine term.
+
+    Needs a chunk of at least two dimensions: at one dimension the
+    depth factor ``s = 1 - 1/(2 sqrt(D+20) - 8.2)`` turns negative
+    and ``mu1`` is the square root of a negative number (NaN in the
+    reference code as well).
+    """
+    ndim = chunk.shape[-1]
+    mu0 = 2.5
+    d = 1.0
+    s = 1.0 - 1.0 / (2.0 * math.sqrt(ndim + 20.0) - 8.2)
+    mu1 = -math.sqrt((mu0**2 - d) / s)
+
+    y = (10.0 / 100.0) * chunk
+    flip = jnp.where(shift_prefix < 0.0, -1.0, 1.0)
+    t = 2.0 * flip * y
+    funnel0 = jnp.sum(t**2)
+    funnel1 = d * ndim + s * jnp.sum((t + (mu0 - mu1)) ** 2)
+    cos_term = 10.0 * (ndim - jnp.sum(jnp.cos(2.0 * jnp.pi * t)))
+    return jnp.minimum(funnel0, funnel1) + cos_term
+
+
+def f11(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    _shuffle: jax.Array,
+) -> jax.Array:
+    """Hybrid Function 1 (F11): Zakharov, Rosenbrock, Rastrigin.
+
+    Proportions (0.2, 0.4, 0.4); needs ``ndim >= 3``.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+    _shuffle : jax.Array
+        Dimension permutation (identity when deterministic).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    y = (R @ (x - x_opt))[_shuffle]
+    c1, c2, c3 = _hybrid_chunks(y, (0.2, 0.4, 0.4), (1, 1, 1))
+    return (
+        zakharov(c1)
+        + cec_rosenbrock((2.048 / 100.0) * c2)
+        + cec_rastrigin((5.12 / 100.0) * c3)
+        + 0.0 * jnp.sum(y)
+        + f_opt
+    )
+
+
+def f12(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    _shuffle: jax.Array,
+) -> jax.Array:
+    """Hybrid Function 2 (F12): Elliptic, Modified Schwefel, Bent Cigar.
+
+    Proportions (0.3, 0.3, 0.4); needs ``ndim >= 3``.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+    _shuffle : jax.Array
+        Dimension permutation (identity when deterministic).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    y = (R @ (x - x_opt))[_shuffle]
+    c1, c2, c3 = _hybrid_chunks(y, (0.3, 0.3, 0.4), (1, 1, 1))
+    return (
+        high_conditioned_elliptic(c1)
+        + modified_schwefel(10.0 * c2)
+        + cec_bent_cigar(c3)
+        + 0.0 * jnp.sum(y)
+        + f_opt
+    )
+
+
+def f13(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    _shuffle: jax.Array,
+) -> jax.Array:
+    """Hybrid Function 3 (F13): Bent Cigar, Rosenbrock, Lunacek
+    Bi-Rastrigin.
+
+    Proportions (0.3, 0.3, 0.4); needs ``ndim >= 4`` (the Lunacek
+    chunk must hold at least two dimensions — see
+    ``_hybrid_lunacek``). The Lunacek sub-kernel's sign flip reads
+    the leading entries of the full shift vector (reference-code
+    global-buffer aliasing).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+    _shuffle : jax.Array
+        Dimension permutation (identity when deterministic).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    y = (R @ (x - x_opt))[_shuffle]
+    c1, c2, c3 = _hybrid_chunks(y, (0.3, 0.3, 0.4), (1, 1, 2))
+    return (
+        cec_bent_cigar(c1)
+        + cec_rosenbrock((2.048 / 100.0) * c2)
+        + _hybrid_lunacek(c3, x_opt[: c3.shape[-1]])
+        + 0.0 * jnp.sum(y)
+        + f_opt
+    )
+
+
+def f14(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    _shuffle: jax.Array,
+) -> jax.Array:
+    """Hybrid Function 4 (F14): Elliptic, Ackley, Schaffer F7,
+    Rastrigin.
+
+    Proportions (0.2, 0.2, 0.2, 0.4); needs ``ndim >= 6`` (the
+    Schaffer F7 chunk must hold at least two dimensions). In the
+    reference code the Schaffer F7 sub-kernel reads the LEADING
+    entries of the shuffled vector instead of its own chunk (stale
+    global-buffer aliasing) — its own chunk's coordinates never
+    influence the value. Replicated faithfully (published results
+    used it); the ``0.0 * sum(y)`` term keeps NaN propagating
+    through the ignored coordinates.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+    _shuffle : jax.Array
+        Dimension permutation (identity when deterministic).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    y = (R @ (x - x_opt))[_shuffle]
+    c1, c2, c3, c4 = _hybrid_chunks(y, (0.2, 0.2, 0.2, 0.4), (1, 1, 2, 1))
+    return (
+        high_conditioned_elliptic(c1)
+        + ackley(c2)
+        + schaffer_f7(y[: c3.shape[-1]])
+        + cec_rastrigin((5.12 / 100.0) * c4)
+        + 0.0 * jnp.sum(y)
+        + f_opt
+    )
+
+
+def f15(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    _shuffle: jax.Array,
+) -> jax.Array:
+    """Hybrid Function 5 (F15): Bent Cigar, HGBat, Rastrigin,
+    Rosenbrock.
+
+    Proportions (0.2, 0.2, 0.3, 0.3); needs ``ndim >= 4``.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+    _shuffle : jax.Array
+        Dimension permutation (identity when deterministic).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    y = (R @ (x - x_opt))[_shuffle]
+    c1, c2, c3, c4 = _hybrid_chunks(y, (0.2, 0.2, 0.3, 0.3), (1, 1, 1, 1))
+    return (
+        cec_bent_cigar(c1)
+        + hgbat((5.0 / 100.0) * c2)
+        + cec_rastrigin((5.12 / 100.0) * c3)
+        + cec_rosenbrock((2.048 / 100.0) * c4)
+        + 0.0 * jnp.sum(y)
+        + f_opt
+    )
+
+
+def f16(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    _shuffle: jax.Array,
+) -> jax.Array:
+    """Hybrid Function 6 (F16): Expanded Schaffer F6, HGBat,
+    Rosenbrock, Modified Schwefel.
+
+    Proportions (0.2, 0.2, 0.3, 0.3); needs ``ndim >= 4``.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+    _shuffle : jax.Array
+        Dimension permutation (identity when deterministic).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    y = (R @ (x - x_opt))[_shuffle]
+    c1, c2, c3, c4 = _hybrid_chunks(y, (0.2, 0.2, 0.3, 0.3), (1, 1, 1, 1))
+    return (
+        expanded_schaffer_f6(c1)
+        + hgbat((5.0 / 100.0) * c2)
+        + cec_rosenbrock((2.048 / 100.0) * c3)
+        + modified_schwefel(10.0 * c4)
+        + 0.0 * jnp.sum(y)
+        + f_opt
+    )
+
+
+def f17(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    _shuffle: jax.Array,
+) -> jax.Array:
+    """Hybrid Function 7 (F17): Katsuura, Ackley, Expanded
+    Griewank-Rosenbrock, Modified Schwefel, Rastrigin.
+
+    Proportions (0.1, 0.2, 0.2, 0.2, 0.3); needs ``ndim >= 5``.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+    _shuffle : jax.Array
+        Dimension permutation (identity when deterministic).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    y = (R @ (x - x_opt))[_shuffle]
+    c1, c2, c3, c4, c5 = _hybrid_chunks(
+        y, (0.1, 0.2, 0.2, 0.2, 0.3), (1, 1, 1, 1, 1)
+    )
+    return (
+        cec2017_katsuura((5.0 / 100.0) * c1)
+        + ackley(c2)
+        + expanded_griewank_rosenbrock((5.0 / 100.0) * c3)
+        + modified_schwefel(10.0 * c4)
+        + cec_rastrigin((5.12 / 100.0) * c5)
+        + 0.0 * jnp.sum(y)
+        + f_opt
+    )
+
+
+def f18(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    _shuffle: jax.Array,
+) -> jax.Array:
+    """Hybrid Function 8 (F18): Elliptic, Ackley, Rastrigin, HGBat,
+    Discus.
+
+    Proportions (0.2, 0.2, 0.2, 0.2, 0.2); needs ``ndim >= 5``.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+    _shuffle : jax.Array
+        Dimension permutation (identity when deterministic).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    y = (R @ (x - x_opt))[_shuffle]
+    c1, c2, c3, c4, c5 = _hybrid_chunks(
+        y, (0.2, 0.2, 0.2, 0.2, 0.2), (1, 1, 1, 1, 1)
+    )
+    return (
+        high_conditioned_elliptic(c1)
+        + ackley(c2)
+        + cec_rastrigin((5.12 / 100.0) * c3)
+        + hgbat((5.0 / 100.0) * c4)
+        + discus(c5)
+        + 0.0 * jnp.sum(y)
+        + f_opt
+    )
+
+
+def f19(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    _shuffle: jax.Array,
+) -> jax.Array:
+    """Hybrid Function 9 (F19): Bent Cigar, Rastrigin, Expanded
+    Griewank-Rosenbrock, Weierstrass, Expanded Schaffer F6.
+
+    Proportions (0.2, 0.2, 0.2, 0.2, 0.2); needs ``ndim >= 5``.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+    _shuffle : jax.Array
+        Dimension permutation (identity when deterministic).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    y = (R @ (x - x_opt))[_shuffle]
+    c1, c2, c3, c4, c5 = _hybrid_chunks(
+        y, (0.2, 0.2, 0.2, 0.2, 0.2), (1, 1, 1, 1, 1)
+    )
+    return (
+        cec_bent_cigar(c1)
+        + cec_rastrigin((5.12 / 100.0) * c2)
+        + expanded_griewank_rosenbrock((5.0 / 100.0) * c3)
+        + cec2005_weierstrass((0.5 / 100.0) * c4)
+        + expanded_schaffer_f6(c5)
+        + 0.0 * jnp.sum(y)
+        + f_opt
+    )
+
+
+def f20(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    _shuffle: jax.Array,
+) -> jax.Array:
+    """Hybrid Function 10 (F20): HGBat, Katsuura, Ackley, Rastrigin,
+    Modified Schwefel, Schaffer F7.
+
+    Proportions (0.1, 0.1, 0.2, 0.2, 0.2, 0.2); needs ``ndim >= 7``
+    (the reference ceil split is ill-defined below ``ndim = 10``;
+    the repair split covers 7-9, keeping the Schaffer F7 chunk at
+    two dimensions). As in ``f14``, the Schaffer F7 sub-kernel reads
+    the LEADING entries of the shuffled vector instead of its own
+    chunk — reference-code global-buffer aliasing, replicated
+    faithfully.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix.
+    Q : jax.Array
+        Second rotation matrix (unused).
+    _shuffle : jax.Array
+        Dimension permutation (identity when deterministic).
+
+    Returns
+    -------
+    jax.Array
+        Function value(s).
+    """
+    y = (R @ (x - x_opt))[_shuffle]
+    c1, c2, c3, c4, c5, c6 = _hybrid_chunks(
+        y, (0.1, 0.1, 0.2, 0.2, 0.2, 0.2), (1, 1, 1, 1, 1, 2)
+    )
+    return (
+        hgbat((5.0 / 100.0) * c1)
+        + cec2017_katsuura((5.0 / 100.0) * c2)
+        + ackley(c3)
+        + cec_rastrigin((5.12 / 100.0) * c4)
+        + modified_schwefel(10.0 * c5)
+        + schaffer_f7(y[: c6.shape[-1]])
+        + 0.0 * jnp.sum(y)
+        + f_opt
+    )

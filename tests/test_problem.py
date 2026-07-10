@@ -68,7 +68,9 @@ def test_missing_key_raises():
 @pytest.mark.parametrize("name", BBOB_NAMES + CEC_NAMES + CEC2017_NAMES)
 def test_problem_fields_match_metadata_dicts(name):
     """Problem bundles the same facts the separate dicts expose."""
-    p = problem(name, ndim=3, key=jr.key(0))
+    # ndim 20 clears every cec2017 min_ndim (hybrids need up to 7)
+    ndim = 20 if name in CEC2017_NAMES else 3
+    p = problem(name, ndim=ndim, key=jr.key(0))
     if name in BBOB_NAMES:
         assert p.bounds == bbob_bounds[name]
         assert p.tags == function_characteristics[name]
@@ -181,6 +183,9 @@ def test_cec2017_global_minimum_at_x_opt(name, dim, deterministic):
     the resolver places x_opt at the rotated all-ones point, so this
     also pins the Levy optimum-displacement handling.
     """
+    min_ndim = problem(name, ndim=20, key=jr.key(0)).min_ndim
+    if dim < min_ndim:
+        pytest.skip(f"{name} needs ndim >= {min_ndim}")
     p = problem(name, ndim=dim, key=jr.key(0), deterministic=deterministic)
     result = p.fn(p.x_opt)
     assert jnp.isclose(result, p.f_opt, atol=1e-5), (
