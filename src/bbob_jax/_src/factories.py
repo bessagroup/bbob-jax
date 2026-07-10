@@ -542,6 +542,98 @@ def make_cec2017_hybrid(
     )
 
 
+def make_cec2017_composition(
+    fn: Callable,
+    ndim: int,
+    key: PRNGKeyArray | None = None,
+    num_components: int = 3,
+    with_shuffles: bool = False,
+    min_ndim: int = 1,
+    deterministic: bool = False,
+) -> BBOBFn:
+    """Factory for CEC 2017 composition functions (F21-F30).
+
+    Samples stacked per-component shifts (``(N, ndim)`` in
+    ``[-80, 80]``), rotations (``(N, ndim, ndim)``) and, for
+    F29/F30 (``with_shuffles=True``), stacked dimension
+    permutations, plus a sampled ``f_opt``. The global minimum is
+    the first component's shift (resolved by
+    ``_first_component_x_opt`` in ``spec.py``); deterministic
+    instances are degenerate exactly like the deterministic CEC
+    2005 compositions (all component shifts coincide at zero).
+
+    Parameters
+    ----------
+    fn : Callable
+        Base CEC 2017 composition function.
+    ndim : int
+        Number of input dimensions.
+    key : PRNGKeyArray or None, optional
+        JAX random key. Required when ``deterministic`` is
+        False; ignored otherwise.
+    num_components : int, optional
+        Number of composition components (default 3).
+    with_shuffles : bool, optional
+        Bind stacked ``_shuffle`` permutations (hybrid-composed
+        F29/F30 only).
+    min_ndim : int, optional
+        Smallest ``ndim`` the function is defined for.
+    deterministic : bool, optional
+        When True, use zero shifts, identity rotations, identity
+        shuffles and zero ``f_opt`` instead of sampling.
+
+    Returns
+    -------
+    BBOBFn
+        Tuple of (partial function, optimal value).
+
+    Raises
+    ------
+    ValueError
+        If ``ndim < min_ndim``.
+    """
+    if ndim < min_ndim:
+        raise ValueError(
+            f"{getattr(fn, '__name__', fn)} requires ndim >= {min_ndim}, "
+            f"got {ndim}"
+        )
+    if deterministic:
+        f_opt_val = jnp.array(0.0)
+        eyes = jnp.stack([jnp.eye(ndim)] * num_components)
+        kwargs: dict[str, Any] = {
+            "x_opt": jnp.zeros((num_components, ndim)),
+            "f_opt": f_opt_val,
+            "R": eyes,
+            "Q": eyes,
+        }
+        if with_shuffles:
+            kwargs["_shuffle"] = jnp.stack([jnp.arange(ndim)] * num_components)
+        return Partial(fn, **kwargs), f_opt_val
+    if key is None:
+        raise ValueError("key is required when deterministic=False")
+
+    key_r, key_q, key_s, key_x, key_f = jr.split(key, 5)
+    x_opt = jnp.stack(
+        [
+            xopt(key=k, ndim=ndim, minval=-80.0, maxval=80.0)
+            for k in jr.split(key_x, num_components)
+        ]
+    )
+    R = jnp.stack(
+        [rotation_matrix(ndim, k) for k in jr.split(key_r, num_components)]
+    )
+    Q = jnp.stack(
+        [rotation_matrix(ndim, k) for k in jr.split(key_q, num_components)]
+    )
+    f_opt_val = fopt(key_f)
+    kwargs = {"x_opt": x_opt, "f_opt": f_opt_val, "R": R, "Q": Q}
+    if with_shuffles:
+        kwargs["_shuffle"] = jnp.stack(
+            [jr.permutation(k, ndim) for k in jr.split(key_s, num_components)]
+        )
+    return Partial(fn, **kwargs), f_opt_val
+
+
 def make_cec2005_conditioned(
     fn: Callable,
     ndim: int,
