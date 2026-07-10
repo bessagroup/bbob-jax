@@ -36,10 +36,10 @@ def test_no_key_overlap():
 
 
 def test_cec2017_bounds_keys():
-    """cec2017_bounds covers F1 and F3-F10 (F2 was withdrawn); the
-    hybrid and composition waves extend this set."""
+    """cec2017_bounds covers F1 and F3-F20 (F2 was withdrawn); the
+    composition wave extends this set."""
     assert set(cec2017_bounds.keys()) == {
-        f"cec2017_f{i}" for i in range(1, 11) if i != 2
+        f"cec2017_f{i}" for i in range(1, 21) if i != 2
     }
 
 

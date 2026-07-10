@@ -102,6 +102,7 @@ from bbob_jax._src.factories import (
     make_cec2005,
     make_cec2005_conditioned,
     make_cec2017,
+    make_cec2017_hybrid,
 )
 
 #                                                          Authorship & Credits
@@ -1002,6 +1003,92 @@ CEC2017_SPECS: tuple[FunctionSpec, ...] = (
         maker=Partial(make_cec2017, fn=cec2017.f10),
         tags=_cec2017_tags(),
         bounds=CEC2017_BOUNDS,
+    ),
+    # Hybrids F11-F20: min_ndim is at least one dimension per subcomponent
+    # kernel; f14 and f20 need more because their Schaffer F7 chunk must
+    # hold two dimensions under the chunk-partition rule (see
+    # cec2017_hybrid_partition).
+    FunctionSpec(
+        name="cec2017_f11",
+        suite="cec2017",
+        maker=Partial(make_cec2017_hybrid, fn=cec2017.f11, min_ndim=3),
+        tags=_cec2017_tags(hybrid=True),
+        bounds=CEC2017_BOUNDS,
+        min_ndim=3,
+    ),
+    FunctionSpec(
+        name="cec2017_f12",
+        suite="cec2017",
+        maker=Partial(make_cec2017_hybrid, fn=cec2017.f12, min_ndim=3),
+        tags=_cec2017_tags(hybrid=True),
+        bounds=CEC2017_BOUNDS,
+        min_ndim=3,
+    ),
+    FunctionSpec(
+        name="cec2017_f13",
+        suite="cec2017",
+        # min_ndim 4, not 3: the Lunacek chunk needs two dimensions
+        # (its depth factor is negative at one — NaN in the reference).
+        maker=Partial(make_cec2017_hybrid, fn=cec2017.f13, min_ndim=4),
+        tags=_cec2017_tags(hybrid=True),
+        bounds=CEC2017_BOUNDS,
+        min_ndim=4,
+    ),
+    FunctionSpec(
+        name="cec2017_f14",
+        suite="cec2017",
+        maker=Partial(make_cec2017_hybrid, fn=cec2017.f14, min_ndim=6),
+        tags=_cec2017_tags(hybrid=True),
+        bounds=CEC2017_BOUNDS,
+        min_ndim=6,
+    ),
+    FunctionSpec(
+        name="cec2017_f15",
+        suite="cec2017",
+        maker=Partial(make_cec2017_hybrid, fn=cec2017.f15, min_ndim=4),
+        tags=_cec2017_tags(hybrid=True),
+        bounds=CEC2017_BOUNDS,
+        min_ndim=4,
+    ),
+    FunctionSpec(
+        name="cec2017_f16",
+        suite="cec2017",
+        maker=Partial(make_cec2017_hybrid, fn=cec2017.f16, min_ndim=4),
+        tags=_cec2017_tags(hybrid=True),
+        bounds=CEC2017_BOUNDS,
+        min_ndim=4,
+    ),
+    FunctionSpec(
+        name="cec2017_f17",
+        suite="cec2017",
+        maker=Partial(make_cec2017_hybrid, fn=cec2017.f17, min_ndim=5),
+        tags=_cec2017_tags(hybrid=True),
+        bounds=CEC2017_BOUNDS,
+        min_ndim=5,
+    ),
+    FunctionSpec(
+        name="cec2017_f18",
+        suite="cec2017",
+        maker=Partial(make_cec2017_hybrid, fn=cec2017.f18, min_ndim=5),
+        tags=_cec2017_tags(hybrid=True),
+        bounds=CEC2017_BOUNDS,
+        min_ndim=5,
+    ),
+    FunctionSpec(
+        name="cec2017_f19",
+        suite="cec2017",
+        maker=Partial(make_cec2017_hybrid, fn=cec2017.f19, min_ndim=5),
+        tags=_cec2017_tags(hybrid=True),
+        bounds=CEC2017_BOUNDS,
+        min_ndim=5,
+    ),
+    FunctionSpec(
+        name="cec2017_f20",
+        suite="cec2017",
+        maker=Partial(make_cec2017_hybrid, fn=cec2017.f20, min_ndim=7),
+        tags=_cec2017_tags(hybrid=True),
+        bounds=CEC2017_BOUNDS,
+        min_ndim=7,
     ),
 )
 

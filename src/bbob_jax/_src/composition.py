@@ -5,8 +5,12 @@ Provides the base kernels used inside the CEC 2005 functions
 ``cec2005_weierstrass``) and the CEC 2017 functions
 (``cec_bent_cigar``, ``zakharov``, ``cec_rosenbrock``,
 ``cec_rastrigin``, ``schaffer_f7``, ``levy``,
-``modified_schwefel``), plus the differentiable CEC 2005
-hybrid composition used by F15-F25 and its ``_f_max``
+``modified_schwefel``, ``high_conditioned_elliptic``,
+``discus``, ``expanded_schaffer_f6``,
+``expanded_griewank_rosenbrock``, ``hgbat``,
+``cec2017_katsuura``), the CEC 2017 hybrid chunk partitioning
+(``cec2017_hybrid_partition``), plus the differentiable CEC
+2005 hybrid composition used by F15-F25 and its ``_f_max``
 precomputation. Used by the CEC suites only; the BBOB
 transformations live in ``transforms.py``.
 
@@ -20,9 +24,11 @@ using ``sj.sqrt`` because the latter maps NaN to 0.
 #                                                                       Modules
 # =============================================================================
 
-# Third-party
+# Standard
+import math
 from typing import cast
 
+# Third-party
 import jax
 import jax.numpy as jnp
 import softjax as sj
@@ -329,6 +335,229 @@ def modified_schwefel(x: jax.Array) -> jax.Array:
     g = jnp.where(z > 500.0, g_high, jnp.where(z < -500.0, g_low, g_mid))
     g_ref = mid(jnp.asarray(4.209687462275036e2, dtype=x.dtype))
     return g_ref * ndim - jnp.sum(g)
+
+
+def high_conditioned_elliptic(x: jax.Array) -> jax.Array:
+    """High Conditioned Elliptic kernel. Minimum 0 at origin.
+
+    ``sum(10^(6i/(D-1)) * x_i^2)`` (0-based ``i``); the reference
+    divides by ``nx - 1``, which is undefined behavior at ``nx = 1``
+    — here the denominator is clamped to 1 (cf. ``cec2005.f3``).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+    exponents = jnp.arange(ndim, dtype=x.dtype) / max(ndim - 1, 1)
+    return jnp.sum(10.0 ** (6.0 * exponents) * jnp.square(x))
+
+
+def discus(x: jax.Array) -> jax.Array:
+    """Discus kernel. Minimum 0 at origin.
+
+    ``10^6 * x_1^2 + sum(x_i^2)`` — the counterpart of
+    ``cec_bent_cigar`` (not to be confused with the full BBOB
+    function ``discuss`` in ``bbob.py``).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    return 1e6 * x[0] ** 2 + jnp.sum(x[1:] ** 2)
+
+
+def expanded_schaffer_f6(x: jax.Array) -> jax.Array:
+    """Expanded Schaffer's F6 kernel. Minimum 0 at origin.
+
+    Chains :func:`scaffer_f6` over consecutive pairs with
+    wrap-around: ``g(x_1,x_2) + ... + g(x_{D-1},x_D) + g(x_D,x_1)``.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    return jnp.sum(scaffer_f6(x, jnp.roll(x, -1)))
+
+
+def expanded_griewank_rosenbrock(x: jax.Array) -> jax.Array:
+    """Expanded Griewank-plus-Rosenbrock kernel. Minimum 0 at origin.
+
+    Griewank applied to consecutive-pair Rosenbrock terms with
+    wrap-around, on ``w = x + 1`` (the reference code's "shift to
+    origin" re-centering).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    w = x + 1.0
+    w_next = jnp.roll(w, -1)
+    t = 100.0 * (w**2 - w_next) ** 2 + (w - 1.0) ** 2
+    return jnp.sum(t**2 / 4000.0 - jnp.cos(t) + 1.0)
+
+
+def hgbat(x: jax.Array) -> jax.Array:
+    """HGBat kernel (Hans-Georg Beyer). Minimum 0 at origin.
+
+    ``|r2^2 - s^2|^(1/2) + (0.5 r2 + s)/D + 0.5`` on ``z = x - 1``
+    (re-centered so the original all-minus-ones optimum lands at
+    the origin), with ``r2 = sum(z^2)``, ``s = sum(z)``. At the
+    optimum ``r2^2 - s^2 = 0`` exactly, where the half-power's
+    gradient is infinite — the guard ``sqrt(|v| + eps) - sqrt(eps)``
+    keeps the gradient finite, the optimum value exactly 0, and the
+    error elsewhere below ``sqrt(eps)``.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+    z = x - 1.0
+    r2 = jnp.sum(jnp.square(z))
+    s = jnp.sum(z)
+    v = jnp.abs(r2**2 - s**2)
+    root = jnp.sqrt(v + 1e-12) - jnp.sqrt(jnp.asarray(1e-12, dtype=x.dtype))
+    return root + (0.5 * r2 + s) / ndim + 0.5
+
+
+def cec2017_katsuura(x: jax.Array) -> jax.Array:
+    """Katsuura kernel with CEC 2017 parameters. Minimum 0 at origin.
+
+    ``(10/D^2) * prod(1 + i * sum_j |2^j x_i - round(2^j x_i)|/2^j)
+    ^(10/D^1.2) - 10/D^2`` with ``j = 1..32``. Plain ``jnp.round``
+    (zero gradient) as in the BBOB ``katsuura``; the remaining terms
+    have well-defined gradients almost everywhere.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+    j_pow = 2.0 ** jnp.arange(1, 33, dtype=x.dtype)  # (32,)
+    scaled = j_pow[:, None] * x[None, :]  # (32, ndim)
+    frac_dist = jnp.abs(scaled - jnp.round(scaled)) / j_pow[:, None]
+    bracket = 1.0 + jnp.arange(1, ndim + 1, dtype=x.dtype) * jnp.sum(
+        frac_dist, axis=0
+    )
+    prod = jnp.prod(bracket) ** (10.0 / ndim**1.2)
+    scale = 10.0 / ndim**2
+    return cast(jax.Array, scale * prod - scale)
+
+
+#                                                  CEC 2017 hybrid partitioning
+# =============================================================================
+
+
+def cec2017_hybrid_partition(
+    ndim: int,
+    proportions: tuple[float, ...],
+    min_sizes: tuple[int, ...],
+) -> tuple[int, ...]:
+    """Split ``ndim`` into per-kernel chunk sizes for a hybrid function.
+
+    Primary rule is the reference code's: ``ceil(p_i * ndim)`` for
+    all but the last chunk (bit-identical to the C ``ceil`` since
+    Python floats are IEEE doubles), remainder to the last. At every
+    officially supported dimension (multiples of 10, where the
+    products are integral) this is an exact proportional split.
+
+    At other dimensions the ceil rule can violate ``min_sizes``
+    (e.g. a negative last chunk — undefined behavior in the
+    reference); there a largest-remainder split with ``min_sizes``
+    floors is used instead (quota ``p_i * ndim``, floor clamped to
+    ``min_sizes[i]``, leftovers by descending fractional remainder,
+    ties to the lowest index). ``min_sizes`` is 1 per kernel, or 2
+    for Schaffer F7 sub-kernels (undefined below two dimensions).
+
+    Parameters
+    ----------
+    ndim : int
+        Total number of dimensions to split.
+    proportions : tuple[float, ...]
+        Official per-kernel proportions (sum to 1).
+    min_sizes : tuple[int, ...]
+        Smallest admissible size per chunk.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Chunk sizes summing to ``ndim``.
+
+    Raises
+    ------
+    ValueError
+        If no admissible split exists (``ndim`` below the
+        function's ``min_ndim``).
+    """
+    n_kernels = len(proportions)
+    ceil_sizes = [math.ceil(p * ndim) for p in proportions[:-1]]
+    ceil_sizes.append(ndim - sum(ceil_sizes))
+    if all(s >= m for s, m in zip(ceil_sizes, min_sizes, strict=False)):
+        return tuple(ceil_sizes)
+
+    quotas = [p * ndim for p in proportions]
+    sizes = [
+        max(m, math.floor(q)) for m, q in zip(min_sizes, quotas, strict=False)
+    ]
+    remaining = ndim - sum(sizes)
+    if remaining < 0:
+        raise ValueError(
+            f"cannot split ndim={ndim} into {n_kernels} chunks with "
+            f"minimum sizes {min_sizes}"
+        )
+    order = sorted(
+        range(n_kernels),
+        key=lambda i: (-(quotas[i] - math.floor(quotas[i])), i),
+    )
+    while remaining > 0:
+        for i in order:
+            if remaining == 0:
+                break
+            sizes[i] += 1
+            remaining -= 1
+    if any(s < m for s, m in zip(sizes, min_sizes, strict=False)):
+        raise ValueError(
+            f"cannot split ndim={ndim} into {n_kernels} chunks with "
+            f"minimum sizes {min_sizes}"
+        )
+    return tuple(sizes)
 
 
 def hybrid_composition(
