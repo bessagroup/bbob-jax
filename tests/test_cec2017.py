@@ -1,4 +1,4 @@
-"""Tests for CEC 2017 benchmark functions (F1, F3-F20).
+"""Tests for CEC 2017 benchmark functions (F1, F3-F30).
 
 These tests validate JAX compatibility (jit, vmap, grad), NaN propagation
 and basic sanity checks. They do NOT validate that results match the
@@ -59,6 +59,9 @@ MIN_NDIMS = {
     "cec2017_f18": 5,
     "cec2017_f19": 5,
     "cec2017_f20": 7,
+    # hybrid-composed compositions inherit their largest component
+    "cec2017_f29": 5,
+    "cec2017_f30": 5,
 }
 
 

@@ -451,6 +451,37 @@ def hgbat(x: jax.Array) -> jax.Array:
     return root + (0.5 * r2 + s) / ndim + 0.5
 
 
+def happycat(x: jax.Array) -> jax.Array:
+    """HappyCat kernel (Hans-Georg Beyer). Minimum 0 at origin.
+
+    ``|r2 - D|^(1/4) + (0.5 r2 + s)/D + 0.5`` on ``z = x - 1``
+    (re-centered like :func:`hgbat`), with ``r2 = sum(z^2)``,
+    ``s = sum(z)``. At the optimum ``r2 - D = 0`` exactly, where
+    the quarter-power's gradient is infinite — the guard
+    ``(|v| + eps)^(1/4) - eps^(1/4)`` keeps the gradient finite,
+    the optimum value exactly 0, and the error elsewhere below
+    ``eps^(1/4)`` (~1e-6).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+    z = x - 1.0
+    r2 = jnp.sum(jnp.square(z))
+    s = jnp.sum(z)
+    v = jnp.abs(r2 - ndim)
+    eps = jnp.asarray(1e-24, dtype=x.dtype)
+    root = (v + eps) ** 0.25 - eps**0.25
+    return root + (0.5 * r2 + s) / ndim + 0.5
+
+
 def cec2017_katsuura(x: jax.Array) -> jax.Array:
     """Katsuura kernel with CEC 2017 parameters. Minimum 0 at origin.
 
@@ -558,6 +589,71 @@ def cec2017_hybrid_partition(
             f"minimum sizes {min_sizes}"
         )
     return tuple(sizes)
+
+
+def cec2017_composition(
+    x: jax.Array,
+    x_opt: jax.Array,
+    deltas: tuple[float, ...],
+    biases: tuple[float, ...],
+    fits: jax.Array,
+) -> jax.Array:
+    """CEC 2017 composition weighting (``cf_cal`` in the reference).
+
+    ``w_i = exp(-d2_i / (2 D delta_i^2)) / sqrt(d2_i)`` with
+    ``d2_i = ||x - o_i||^2``; the value is the ``w``-weighted mean of
+    ``fits + biases``. Deviations from the reference, both
+    behavior-preserving:
+
+    - the reference substitutes ``INF = 1e99`` for the weight at
+      ``d2_i = 0``; here it is ``finfo(dtype).max * 1e-6`` so the
+      substitute dominates without overflowing under float32. Either
+      way the ratio collapses to that component's fitness.
+    - if every weight underflows to zero the reference falls back to
+      equal weights; replicated with a ``where`` on the weight sum.
+
+    NaN inputs propagate through ``fits`` (each component's fitness
+    is NaN) even where the weight ``where``-guards select finite
+    branch values. ``deltas``/``biases`` are plain tuples so import
+    order does not bake in a dtype (converted at call time).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+    x_opt : jax.Array
+        Stacked component shifts of shape ``(cf_num, ndim)``.
+    deltas : tuple[float, ...]
+        Per-component locality widths (sigma).
+    biases : tuple[float, ...]
+        Per-component value offsets.
+    fits : jax.Array
+        Stacked per-component fitness values (already
+        lambda-scaled), shape ``(cf_num,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar composition value.
+    """
+    cf_num = x_opt.shape[0]
+    ndim = x.shape[-1]
+    deltas_arr = jnp.asarray(deltas, dtype=x.dtype)
+    biases_arr = jnp.asarray(biases, dtype=x.dtype)
+
+    d2 = jnp.sum((x[None, :] - x_opt) ** 2, axis=-1)
+    big = jnp.finfo(x.dtype).max * 1e-6
+    safe_d2 = jnp.where(d2 > 0, d2, 1.0)
+    w = jnp.where(
+        d2 > 0,
+        jnp.exp(-d2 / (2.0 * ndim * deltas_arr**2)) / jnp.sqrt(safe_d2),
+        big,
+    )
+    w_sum = jnp.sum(w)
+    w_norm = jnp.where(
+        w_sum > 0, w / jnp.where(w_sum > 0, w_sum, 1.0), 1.0 / cf_num
+    )
+    return jnp.sum(w_norm * (fits + biases_arr))
 
 
 def hybrid_composition(

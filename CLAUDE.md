@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`bbob-jax` is a JAX implementation of the 24 BBOB (Black-Box Optimization Benchmark) noise-free functions, the 25 CEC 2005 benchmark functions, and the CEC 2017 bound-constrained suite (in progress: F1, F3–F20 landed; compositions F21–F30 follow; F2 was officially withdrawn and is skipped). The key value-add over the original C implementations is full JAX compatibility: automatic differentiation, JIT compilation, and vectorization via `vmap`.
+`bbob-jax` is a JAX implementation of the 24 BBOB (Black-Box Optimization Benchmark) noise-free functions, the 25 CEC 2005 benchmark functions, and the 29 CEC 2017 bound-constrained functions (F2 was officially withdrawn and is skipped; numbering keeps the hole). The key value-add over the original C implementations is full JAX compatibility: automatic differentiation, JIT compilation, and vectorization via `vmap`.
 
 ## Commands
 
@@ -102,7 +102,7 @@ src/bbob_jax/
 └── _src/
     ├── bbob.py          # All 24 BBOB function implementations
     ├── cec2005.py       # All 25 CEC 2005 function implementations (f1–f25)
-    ├── cec2017.py       # CEC 2017 function implementations (F2 withdrawn/skipped)
+    ├── cec2017.py       # All 29 CEC 2017 function implementations (F2 withdrawn/skipped)
     ├── spec.py          # FunctionSpec table — single source of truth per function
     ├── factories.py     # Mode-parameterized makers (deterministic= flag)
     ├── registry.py      # The six registry dicts, derived from spec.py

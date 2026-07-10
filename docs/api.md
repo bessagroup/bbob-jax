@@ -170,3 +170,84 @@ Individual benchmark function APIs. Public call pattern is via the root package 
 ::: bbob_jax.katsuura
 
 ::: bbob_jax.lunacek_bi_rastrigin
+
+## CEC 2017 Registry
+
+Centralized access to the CEC 2017 benchmark functions and their metadata.
+
+- `bbob_jax.cec2017_registry`: Randomized variants of each CEC 2017 function (names `cec2017_f1`, `cec2017_f3` … `cec2017_f30`; F2 was officially withdrawn). Parameters (shift vectors, rotation matrices, hybrid shuffle permutations) are generated from seeds rather than loaded from the official data files — results will not match published CEC 2017 benchmarking results, but the implementations are cross-validated point-for-point against the compiled official reference code with the official data injected (`scripts/crosscheck_cec2017.py`).
+- `bbob_jax.cec2017_registry_original`: Deterministic baseline variants (zero shift, identity rotations, identity shuffles, no output offset).
+- `bbob_jax.cec2017_function_characteristics`: Properties per function (`unimodal`/`multimodal`/`hybrid`/`composition`/`rotated`/`structure_modified` flags; the suite has no stochastic functions).
+
+Some functions require a minimum dimensionality (`Problem.min_ndim`): the hybrids F11–F20 need one dimension per subcomponent kernel (up to 7), F29/F30 inherit their component hybrids' minimum, and F6 needs two. Makers raise `ValueError` below it.
+
+Where the CEC 2017 technical report and the official reference code disagree, the implementation follows the code — that is what published results were produced with — and each divergence is documented in the function's docstring (e.g. F6's rotation is dead code in the reference, F8's non-continuity transform never executes, and F9's true minimizer is displaced from the sampled shift).
+
+::: bbob_jax.cec2017_registry
+
+::: bbob_jax.cec2017_registry_original
+
+::: bbob_jax.cec2017_function_characteristics
+
+## CEC 2017 Functions
+
+Individual CEC 2017 benchmark function APIs (F1, F3–F30). Access via the registries is recommended; the registry supplies internal parameters so the user-facing call is just `fn(x)`.
+
+::: bbob_jax._src.cec2017.f1
+
+::: bbob_jax._src.cec2017.f3
+
+::: bbob_jax._src.cec2017.f4
+
+::: bbob_jax._src.cec2017.f5
+
+::: bbob_jax._src.cec2017.f6
+
+::: bbob_jax._src.cec2017.f7
+
+::: bbob_jax._src.cec2017.f8
+
+::: bbob_jax._src.cec2017.f9
+
+::: bbob_jax._src.cec2017.f10
+
+::: bbob_jax._src.cec2017.f11
+
+::: bbob_jax._src.cec2017.f12
+
+::: bbob_jax._src.cec2017.f13
+
+::: bbob_jax._src.cec2017.f14
+
+::: bbob_jax._src.cec2017.f15
+
+::: bbob_jax._src.cec2017.f16
+
+::: bbob_jax._src.cec2017.f17
+
+::: bbob_jax._src.cec2017.f18
+
+::: bbob_jax._src.cec2017.f19
+
+::: bbob_jax._src.cec2017.f20
+
+::: bbob_jax._src.cec2017.f21
+
+::: bbob_jax._src.cec2017.f22
+
+::: bbob_jax._src.cec2017.f23
+
+::: bbob_jax._src.cec2017.f24
+
+::: bbob_jax._src.cec2017.f25
+
+::: bbob_jax._src.cec2017.f26
+
+::: bbob_jax._src.cec2017.f27
+
+::: bbob_jax._src.cec2017.f28
+
+::: bbob_jax._src.cec2017.f29
+
+::: bbob_jax._src.cec2017.f30
+
