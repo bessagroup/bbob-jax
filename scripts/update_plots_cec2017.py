@@ -9,6 +9,7 @@ coordinates stay pinned at the optimum (the origin for deterministic
 instances). Slice plots carry a "(2D slice of {D}D)" title suffix.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 
 import jax.random as jr
@@ -18,7 +19,7 @@ from bbob_jax import cec2017_bounds, cec2017_registry_original
 from bbob_jax._src.spec import SPEC_BY_NAME
 
 
-def _slice_maker(maker, full_ndim: int):
+def _slice_maker(maker: Callable, full_ndim: int) -> Callable:
     """Adapt a min_ndim>2 maker to the 2-arg interface plot_2d expects.
 
     The returned maker builds the deterministic instance at
@@ -26,11 +27,11 @@ def _slice_maker(maker, full_ndim: int):
     (remaining coordinates pinned at zero, the deterministic optimum).
     """
 
-    def make(ndim, key):
+    def make(ndim: int, key: object) -> tuple[Callable, object]:
         del ndim
         fn_full, f_opt = maker(ndim=full_ndim, key=key)
 
-        def fn_slice(x2):
+        def fn_slice(x2):  # type: ignore[no-untyped-def]
             import jax.numpy as jnp
 
             xx = jnp.zeros(full_ndim, dtype=x2.dtype)
@@ -42,7 +43,7 @@ def _slice_maker(maker, full_ndim: int):
     return make
 
 
-def _plot_entries():
+def _plot_entries() -> tuple[list, Callable, Callable]:
     from bbob_jax.plotting import plot_2d, plot_3d
 
     entries = []

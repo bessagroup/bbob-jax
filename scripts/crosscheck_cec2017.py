@@ -20,7 +20,8 @@ scaling) — see the kernel docstrings in ``composition.py``.
 
 Usage::
 
-    uv run python scripts/crosscheck_cec2017.py --ref-dir /path/to/CEC17_fast_pow
+    uv run python scripts/crosscheck_cec2017.py \\
+        --ref-dir /path/to/CEC17_fast_pow
     # where ref-dir contains cec17_test_func.cpp and input_data/
     # (from the official P-N-Suganthan/CEC2017-BoundContrained repo,
     #  CEC17_fast_pow-C++.zip)
@@ -32,6 +33,7 @@ import argparse
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -82,17 +84,18 @@ def compile_reference(ref_dir: Path, build_dir: Path) -> Path:
     return exe
 
 
-def load_official(data_dir: Path, func: int, nx: int):
+def load_official(
+    data_dir: Path, func: int, nx: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
     """Load (shift, matrices, shuffle) as the reference code does."""
     m_vals = np.loadtxt(data_dir / f"M_{func}_D{nx}.txt").ravel()
     shift_lines = (
         (data_dir / f"shift_data_{func}.txt").read_text().splitlines()
     )
 
-    if func < 20 and func not in COMPOSITIONS:
-        mat = m_vals[: nx * nx].reshape(nx, nx)
-        shift = np.fromstring(shift_lines[0], sep=" ")[:nx]
-    elif func in HYBRIDS or func < 21:  # func == 20
+    mat: np.ndarray
+    shift: np.ndarray
+    if func <= 20:  # simple functions and hybrids: one matrix, one shift
         mat = m_vals[: nx * nx].reshape(nx, nx)
         shift = np.fromstring(shift_lines[0], sep=" ")[:nx]
     else:
@@ -105,7 +108,7 @@ def load_official(data_dir: Path, func: int, nx: int):
             ]
         )
 
-    shuffle = None
+    shuffle: np.ndarray | None = None
     if func in HYBRIDS:
         shuffle = (
             np.loadtxt(data_dir / f"shuffle_data_{func}_D{nx}.txt")
@@ -124,7 +127,12 @@ def load_official(data_dir: Path, func: int, nx: int):
     return shift, mat, shuffle
 
 
-def build_bbob_jax_fn(func: int, shift, mat, shuffle):
+def build_bbob_jax_fn(
+    func: int,
+    shift: np.ndarray,
+    mat: np.ndarray,
+    shuffle: np.ndarray | None,
+) -> Callable:
     import jax.numpy as jnp
     from jax.tree_util import Partial
 
