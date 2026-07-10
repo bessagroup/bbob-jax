@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`bbob-jax` is a JAX implementation of the 24 BBOB (Black-Box Optimization Benchmark) noise-free functions and the 25 CEC 2005 benchmark functions. The key value-add over the original C implementations is full JAX compatibility: automatic differentiation, JIT compilation, and vectorization via `vmap`.
+`bbob-jax` is a JAX implementation of the 24 BBOB (Black-Box Optimization Benchmark) noise-free functions, the 25 CEC 2005 benchmark functions, and the CEC 2017 bound-constrained suite (in progress: F1, F3–F10 landed; hybrids F11–F20 and compositions F21–F30 follow; F2 was officially withdrawn and is skipped). The key value-add over the original C implementations is full JAX compatibility: automatic differentiation, JIT compilation, and vectorization via `vmap`.
 
 ## Commands
 
@@ -28,9 +28,11 @@ make docs                  # Start MkDocs dev server
 - `registry_original` — deterministic BBOB factory (zero x_opt, zero f_opt, identity rotations)
 - `cec2005_registry` — randomized CEC 2005 factory (25 functions `f1`–`f25`)
 - `cec2005_registry_original` — deterministic CEC 2005 factory
+- `cec2017_registry` / `cec2017_registry_original` — CEC 2017 factories (names `cec2017_f1`, `cec2017_f3`…; prefixed because `SPEC_BY_NAME` is a single namespace and CEC 2005 owns the bare `fN` keys)
 - `function_characteristics` — BBOB metadata dict (separable/unimodal flags per function)
 - `cec2005_function_characteristics` — CEC 2005 metadata dict
-- `bbob_bounds` / `cec2005_bounds` — per-function search-space bounds (also via the `bounds` submodule)
+- `cec2017_function_characteristics` — CEC 2017 metadata dict (`unimodal`/`multimodal`/`hybrid`/`composition`/`rotated`/`structure_modified`; no `noise` key)
+- `bbob_bounds` / `cec2005_bounds` / `cec2017_bounds` — per-function search-space bounds (also via the `bounds` submodule)
 
 ### Spec Table (single source of truth)
 
@@ -64,11 +66,14 @@ p.fn, p.x_opt, p.f_opt, p.bounds, p.tags, p.noisy
 ```
 `fn(p.x_opt) == p.f_opt` holds for every function (documented exceptions:
 deterministic CEC compositions are degenerate). Noisy CEC functions
-(`noise` tag) are called as `fn(x, key)`.
+(`noise` tag) are called as `fn(x, key)`. `Problem.min_ndim` is the
+smallest supported dimension (default 1); makers raise `ValueError` below
+it (e.g. `cec2017_f6` needs `ndim >= 2`, CEC 2017 hybrids will need one
+dimension per subcomponent kernel).
 
 ### Core Function Signature
 
-All 24 BBOB functions in `_src/bbob.py` and the 25 CEC 2005 functions in `_src/cec2005.py` share the internal signature:
+All 24 BBOB functions in `_src/bbob.py`, the 25 CEC 2005 functions in `_src/cec2005.py` and the CEC 2017 functions in `_src/cec2017.py` share the internal signature:
 ```python
 def fn(x, x_opt, f_opt, R, Q) -> jax.Array
 ```
@@ -96,17 +101,19 @@ src/bbob_jax/
 └── _src/
     ├── bbob.py          # All 24 BBOB function implementations
     ├── cec2005.py       # All 25 CEC 2005 function implementations (f1–f25)
+    ├── cec2017.py       # CEC 2017 function implementations (F2 withdrawn/skipped)
     ├── spec.py          # FunctionSpec table — single source of truth per function
     ├── factories.py     # Mode-parameterized makers (deterministic= flag)
-    ├── registry.py      # The four registry dicts, derived from spec.py
+    ├── registry.py      # The six registry dicts, derived from spec.py
     ├── problem.py       # Problem record + problem() accessor
     ├── transforms.py    # BBOB transforms: tosz, tasy, lambda, penalty
-    ├── composition.py   # CEC kernels + hybrid composition machinery
+    ├── composition.py   # CEC kernels (2005 + 2017) + hybrid composition machinery
     ├── sampling.py      # fopt, xopt, bernoulli_vector, rotation_matrix
     ├── mesh.py          # _create_mesh grid evaluator (matplotlib-free)
     ├── tags.py          # function_characteristics, derived from spec.py
     ├── cec2005_tags.py  # cec2005_function_characteristics, derived from spec.py
-    ├── bounds.py        # bbob_bounds, cec2005_bounds, derived from spec.py
+    ├── cec2017_tags.py  # cec2017_function_characteristics, derived from spec.py
+    ├── bounds.py        # bbob_bounds, cec2005_bounds, cec2017_bounds, derived from spec.py
     └── plotting.py      # plot_2d, plot_3d (requires optional matplotlib dep)
 ```
 
@@ -114,12 +121,13 @@ Architecture decisions are recorded in `docs/adr/`.
 
 ### Testing
 
-Tests live in `tests/` (`test_example.py` for BBOB, `test_cec2005.py` for CEC 2005, plus `test_bounds.py`, `test_composition.py`, `test_problem.py`, `test_consistency.py`, `test_gallagher_equivalence.py`). They are parametrized over all functions × multiple dimensions × both registries. Each test validates:
+Tests live in `tests/` (`test_example.py` for BBOB, `test_cec2005.py` for CEC 2005, `test_cec2017.py` for CEC 2017, plus `test_bounds.py`, `test_composition.py`, `test_problem.py`, `test_consistency.py`, `test_gallagher_equivalence.py`). They are parametrized over all functions × multiple dimensions × both registries. Each test validates:
 - Correct scalar output shape
 - JIT compilation (`jax.jit`)
 - Vectorization (`jax.vmap`)
 - Gradient computation (`jax.grad`)
-- `fn(x_opt) == f_opt` for both suites via `problem()` (`test_problem.py`)
+- NaN propagation (NaN in → NaN out) for BBOB and CEC 2017
+- `fn(x_opt) == f_opt` for all suites via `problem()` (`test_problem.py`)
 - Registry/tags/bounds key-set consistency and tag schemas (`test_consistency.py`)
 
 `matplotlib` is an optional dependency (install group `plot`); tests don't require it.

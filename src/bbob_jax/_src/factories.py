@@ -408,6 +408,62 @@ def make_cec2005(
     return Partial(fn, x_opt=x_opt, f_opt=f_opt_val, R=R, Q=Q), f_opt_val
 
 
+def make_cec2017(
+    fn: Callable,
+    ndim: int,
+    key: PRNGKeyArray | None = None,
+    min_ndim: int = 1,
+    deterministic: bool = False,
+) -> BBOBFn:
+    """Factory for CEC 2017 functions with seed-generated params.
+
+    Delegates to :func:`make_cec2005` (same sampling scheme:
+    distinct subkeys for R, Q, x_opt and f_opt) with the shift
+    sampled in ``[-80, 80]^D`` as in the official suite, where
+    shifts stay inside 80% of the ``[-100, 100]`` search range.
+
+    Parameters
+    ----------
+    fn : Callable
+        Base CEC 2017 function.
+    ndim : int
+        Number of input dimensions.
+    key : PRNGKeyArray or None, optional
+        JAX random key. Required when ``deterministic`` is
+        False; ignored otherwise.
+    min_ndim : int, optional
+        Smallest ``ndim`` the function is defined for
+        (default 1).
+    deterministic : bool, optional
+        When True, use zero shift, identity rotations and zero
+        ``f_opt`` instead of sampling from ``key``.
+
+    Returns
+    -------
+    BBOBFn
+        Tuple of (partial function, optimal value).
+
+    Raises
+    ------
+    ValueError
+        If ``ndim < min_ndim``.
+    """
+    if ndim < min_ndim:
+        raise ValueError(
+            f"{getattr(fn, '__name__', fn)} requires ndim >= {min_ndim}, "
+            f"got {ndim}"
+        )
+    return make_cec2005(
+        fn,
+        ndim,
+        key,
+        num_components=1,
+        minval=-80.0,
+        maxval=80.0,
+        deterministic=deterministic,
+    )
+
+
 def make_cec2005_conditioned(
     fn: Callable,
     ndim: int,

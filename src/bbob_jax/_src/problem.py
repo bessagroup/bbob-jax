@@ -57,6 +57,9 @@ class Problem(NamedTuple):
         Function characteristics (suite-specific schema).
     noisy : bool
         Whether ``fn`` takes a PRNG key as second argument.
+    min_ndim : int
+        Smallest ``ndim`` the function is defined for;
+        construction raises ``ValueError`` below it.
     """
 
     name: str
@@ -66,6 +69,7 @@ class Problem(NamedTuple):
     bounds: tuple[float, float]
     tags: dict[str, bool]
     noisy: bool
+    min_ndim: int
 
 
 def problem(
@@ -118,4 +122,5 @@ def problem(
         bounds=spec.bounds,
         tags=dict(spec.tags),
         noisy=spec.tags.get("noise", False),
+        min_ndim=spec.min_ndim,
     )

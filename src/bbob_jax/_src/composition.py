@@ -1,11 +1,20 @@
-"""CEC 2005 component kernels and hybrid-composition machinery.
+"""CEC component kernels and hybrid-composition machinery.
 
 Provides the base kernels used inside the CEC 2005 functions
 (``ackley``, ``griewank``, ``scaffer_f6``,
-``cec2005_weierstrass``) and the differentiable hybrid
-composition used by F15-F25, plus its ``_f_max``
-precomputation. Used by the CEC 2005 suite only; the BBOB
+``cec2005_weierstrass``) and the CEC 2017 functions
+(``cec_bent_cigar``, ``zakharov``, ``cec_rosenbrock``,
+``cec_rastrigin``, ``schaffer_f7``, ``levy``,
+``modified_schwefel``), plus the differentiable CEC 2005
+hybrid composition used by F15-F25 and its ``_f_max``
+precomputation. Used by the CEC suites only; the BBOB
 transformations live in ``transforms.py``.
+
+Kernel convention: bare ``(ndim,) -> scalar`` functions with
+minimum 0 at the origin (exception: ``levy``, whose minimum
+is at all-ones — see its docstring). NaN inputs propagate to
+the output; ``sqrt`` calls carry a small epsilon instead of
+using ``sj.sqrt`` because the latter maps NaN to 0.
 """
 
 #                                                                       Modules
@@ -128,6 +137,198 @@ def cec2005_weierstrass(x: jax.Array) -> jax.Array:
     # Per-element difference avoids catastrophic cancellation at z=0
     cos_ref = ak * jnp.cos(jnp.pi * bk)  # (21,)
     return jnp.sum(cos_terms - cos_ref[None, :])
+
+
+#                                                             CEC 2017 kernels
+# =============================================================================
+# Ground truth is the official cec17_test_func.c ("code wins" over the report
+# where they disagree); each function in cec2017.py documents its divergences.
+# Names clashing with the full BBOB functions in bbob.py carry a ``cec_``
+# prefix (cf. ``cec2005_weierstrass``).
+
+
+def cec_bent_cigar(x: jax.Array) -> jax.Array:
+    """Bent Cigar kernel. Minimum 0 at origin.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    return x[0] ** 2 + 1e6 * jnp.sum(x[1:] ** 2)
+
+
+def zakharov(x: jax.Array) -> jax.Array:
+    """Zakharov kernel. Minimum 0 at origin.
+
+    ``sum(x^2) + s^2 + s^4`` with ``s = sum(0.5 * i * x_i)``
+    (1-based ``i``). Unimodal.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+    weights = 0.5 * jnp.arange(1, ndim + 1, dtype=x.dtype)
+    s = jnp.sum(weights * x)
+    return jnp.sum(jnp.square(x)) + s**2 + s**4
+
+
+def cec_rosenbrock(x: jax.Array) -> jax.Array:
+    """Rosenbrock kernel with the CEC ``+1`` re-centering.
+
+    Evaluates the classic Rosenbrock at ``w = x + 1`` so the
+    minimum 0 sits at the origin (the reference code's
+    "shift to origin").
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    w = x + 1.0
+    return jnp.sum(100.0 * (w[:-1] ** 2 - w[1:]) ** 2 + (w[:-1] - 1.0) ** 2)
+
+
+def cec_rastrigin(x: jax.Array) -> jax.Array:
+    """Rastrigin kernel. Minimum 0 at origin.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    return jnp.sum(jnp.square(x) - 10.0 * jnp.cos(2.0 * jnp.pi * x) + 10.0)
+
+
+def schaffer_f7(x: jax.Array) -> jax.Array:
+    """Schaffer's F7 kernel. Minimum 0 at origin. Needs ``ndim >= 2``.
+
+    ``((1/(D-1)) * sum(sqrt(s_i) * (1 + sin^2(50 * s_i^0.2))))^2``
+    with ``s_i = sqrt(x_i^2 + x_{i+1}^2)``. The epsilon inside the
+    square roots keeps the gradient finite at the origin while
+    letting NaN inputs propagate (unlike ``sj.sqrt``).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``, ``ndim >= 2``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+    s = jnp.sqrt(x[:-1] ** 2 + x[1:] ** 2 + 1e-12)
+    terms = jnp.sqrt(s) * (1.0 + jnp.sin(50.0 * s**0.2) ** 2)
+    return (jnp.sum(terms) / (ndim - 1)) ** 2
+
+
+def levy(x: jax.Array) -> jax.Array:
+    """Levy kernel. Minimum 0 at ``x = 1`` (all-ones), NOT the origin.
+
+    ``w = 1 + (x - 1)/4``; the CEC 2017 reference code applies no
+    shrink, so the shifted suite function's argmin is displaced
+    from the shift vector by the rotated all-ones point (handled
+    by the ``x_opt_from`` resolver in ``spec.py``).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    w = 1.0 + (x - 1.0) / 4.0
+    term1 = jnp.sin(jnp.pi * w[0]) ** 2
+    middle = jnp.sum(
+        (w[:-1] - 1.0) ** 2
+        * (1.0 + 10.0 * jnp.sin(jnp.pi * w[:-1] + 1.0) ** 2)
+    )
+    term3 = (w[-1] - 1.0) ** 2 * (1.0 + jnp.sin(2.0 * jnp.pi * w[-1]) ** 2)
+    return term1 + middle + term3
+
+
+def modified_schwefel(x: jax.Array) -> jax.Array:
+    """Modified Schwefel kernel. Minimum 0 at origin.
+
+    Ported branch-for-branch from ``schwefel_func`` in the
+    reference code: ``z = x + 420.9687...``, three regimes
+    (``|z| <= 500``, ``z > 500``, ``z < -500``) with an
+    out-of-range quadratic penalty scaled by ``1/(10000 D)``.
+    All branches are evaluated everywhere and selected with
+    ``jnp.where``; their values and gradients are finite for
+    finite inputs (epsilon-guarded square roots), so the
+    unselected branches contribute exact zeros to the gradient
+    and NaN inputs propagate through the selected branch.
+
+    Note
+    ----
+    The reference code's zero-offset literal ``418.98288...``
+    is replaced by evaluating the mid branch at the shift
+    constant in the input's dtype (the literal is exactly that
+    value in float64), so cancellation at the optimum is exact
+    at whichever precision JAX is configured for — the same
+    treatment as ``schwefel_xsinx`` in ``bbob.py``.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape ``(ndim,)``.
+
+    Returns
+    -------
+    jax.Array
+        Scalar function value.
+    """
+    ndim = x.shape[-1]
+
+    def mid(z: jax.Array) -> jax.Array:
+        return z * jnp.sin(jnp.sqrt(jnp.abs(z) + 1e-12))
+
+    z = x + 4.209687462275036e2
+    penalty_scale = 1.0 / (10000.0 * ndim)
+
+    g_mid = mid(z)
+    high_arg = 500.0 - jnp.mod(z, 500.0)
+    g_high = (
+        high_arg * jnp.sin(jnp.sqrt(high_arg + 1e-12))
+        - (z - 500.0) ** 2 * penalty_scale
+    )
+    low_arg = 500.0 - jnp.mod(jnp.abs(z), 500.0)
+    g_low = (
+        -low_arg * jnp.sin(jnp.sqrt(low_arg + 1e-12))
+        - (z + 500.0) ** 2 * penalty_scale
+    )
+
+    g = jnp.where(z > 500.0, g_high, jnp.where(z < -500.0, g_low, g_mid))
+    g_ref = mid(jnp.asarray(4.209687462275036e2, dtype=x.dtype))
+    return g_ref * ndim - jnp.sum(g)
 
 
 def hybrid_composition(
