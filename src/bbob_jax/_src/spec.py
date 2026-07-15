@@ -88,6 +88,7 @@ from bbob_jax._src.cec2005 import (
 from bbob_jax._src.factories import (
     BBOBFn,
     _add_f_max,
+    _make_bueche,
     _make_cec2005_conditioned_single,
     _make_cec2005_f5,
     _make_cec2005_f7,
@@ -486,7 +487,7 @@ BBOB_SPECS: tuple[FunctionSpec, ...] = (
     FunctionSpec(
         name="skew_rastrigin_bueche",
         suite="bbob",
-        maker=Partial(make_bbob, fn=skew_rastrigin_bueche),
+        maker=Partial(_make_bueche, fn=skew_rastrigin_bueche),
         tags=_bbob_tags(separable=True, unimodal=False),
         bounds=BBOB_BOUNDS,
     ),

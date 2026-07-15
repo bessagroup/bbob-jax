@@ -41,6 +41,7 @@ def _reference_gallagher(
     key = jr.key(0)
     key = jr.fold_in(key, Q[0, 0])
     key1, key2 = jr.split(key)
+    key3 = jr.fold_in(key, 1)
 
     i = jnp.arange(1, num_peaks + 1, dtype=float)
     j = jnp.arange(0, num_peaks - 1, dtype=float)
@@ -58,9 +59,11 @@ def _reference_gallagher(
     y = y.at[0].set(x_opt)
 
     idx = jnp.arange(ndim, dtype=float)
-    c_diags = jnp.power(
-        alpha[:, None], idx[None, :] / (2 * (ndim - 1))
-    ) / jnp.power(alpha[:, None], 0.25)
+    perm_keys = jr.split(key3, num_peaks)
+    perms = jnp.stack([jr.permutation(k, idx) for k in perm_keys])
+    c_diags = jnp.power(alpha[:, None], perms / (2 * (ndim - 1))) / jnp.power(
+        alpha[:, None], 0.25
+    )
 
     diff = x[None, :] - y  # (num_peaks, ndim)
     rotated_diff = jnp.einsum("ij,...j->...i", R, diff)  # (num_peaks, ndim)
