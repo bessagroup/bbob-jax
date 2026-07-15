@@ -33,11 +33,19 @@ from bbob_jax._src.bbob import (
     sum_of_different_powers,
     weierstrass,
 )
-from bbob_jax._src.bounds import bbob_bounds, cec2005_bounds, cec2017_bounds
+from bbob_jax._src.bbob_noisy_tags import bbob_noisy_function_characteristics
+from bbob_jax._src.bounds import (
+    bbob_bounds,
+    bbob_noisy_bounds,
+    cec2005_bounds,
+    cec2017_bounds,
+)
 from bbob_jax._src.cec2005_tags import cec2005_function_characteristics
 from bbob_jax._src.cec2017_tags import cec2017_function_characteristics
 from bbob_jax._src.problem import Problem, problem
 from bbob_jax._src.registry import (
+    bbob_noisy_registry,
+    bbob_noisy_registry_original,
     cec2005_registry,
     cec2005_registry_original,
     cec2017_registry,
@@ -61,6 +69,10 @@ __all__ = [
     "bounds",
     "registry_original",
     "function_characteristics",
+    "bbob_noisy_registry",
+    "bbob_noisy_registry_original",
+    "bbob_noisy_function_characteristics",
+    "bbob_noisy_bounds",
     "cec2005_registry",
     "cec2005_registry_original",
     "cec2005_function_characteristics",

@@ -1,6 +1,6 @@
-"""Registries for the BBOB, CEC 2005 and CEC 2017 benchmark functions.
+"""Registries for the BBOB, BBOB-noisy, CEC 2005 and CEC 2017 benchmarks.
 
-The six registry dicts are derived views of the
+The eight registry dicts are derived views of the
 :class:`~bbob_jax._src.spec.FunctionSpec` table in ``spec.py``:
 the randomized registries call each spec's maker as-is, the
 ``*_original`` registries bind ``deterministic=True`` (zero
@@ -25,7 +25,12 @@ from jaxtyping import PRNGKeyArray
 
 # Local
 from bbob_jax._src.factories import BBOBFn
-from bbob_jax._src.spec import BBOB_SPECS, CEC2005_SPECS, CEC2017_SPECS
+from bbob_jax._src.spec import (
+    BBOB_NOISY_SPECS,
+    BBOB_SPECS,
+    CEC2005_SPECS,
+    CEC2017_SPECS,
+)
 
 #                                                          Authorship & Credits
 # =============================================================================
@@ -40,6 +45,14 @@ registry: dict[str, Callable[[int, PRNGKeyArray], BBOBFn]] = {
 
 registry_original: dict[str, Callable[[int], BBOBFn]] = {
     s.name: Partial(s.maker, deterministic=True) for s in BBOB_SPECS
+}
+
+bbob_noisy_registry: dict[str, Callable] = {
+    s.name: s.maker for s in BBOB_NOISY_SPECS
+}
+
+bbob_noisy_registry_original: dict[str, Callable] = {
+    s.name: Partial(s.maker, deterministic=True) for s in BBOB_NOISY_SPECS
 }
 
 cec2005_registry: dict[str, Callable] = {

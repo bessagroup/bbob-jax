@@ -16,6 +16,7 @@ from typing import NamedTuple
 
 # Third-party
 import jax
+from jax.tree_util import Partial
 from jaxtyping import PRNGKeyArray
 
 # Local
@@ -60,6 +61,12 @@ class Problem(NamedTuple):
     min_ndim : int
         Smallest ``ndim`` the function is defined for;
         construction raises ``ValueError`` below it.
+    fn_true : Callable
+        Undisturbed function, called as ``fn_true(x)``. For
+        noisy functions this is the noise-free value (base +
+        boundary penalty + ``f_opt``) with the same bound
+        instance parameters as ``fn``; for noise-free functions
+        it is ``fn`` itself.
     """
 
     name: str
@@ -70,6 +77,7 @@ class Problem(NamedTuple):
     tags: dict[str, bool]
     noisy: bool
     min_ndim: int
+    fn_true: Callable[..., jax.Array]
 
 
 def problem(
@@ -114,6 +122,7 @@ def problem(
     fn, f_opt = spec.maker(ndim=ndim, key=key, deterministic=deterministic)
     kw = _partial_keywords(fn)
     x_opt = spec.x_opt_from(kw, ndim)
+    fn_true = Partial(spec.true_fn, **kw) if spec.true_fn is not None else fn
     return Problem(
         name=spec.name,
         fn=fn,
@@ -123,4 +132,5 @@ def problem(
         tags=dict(spec.tags),
         noisy=spec.tags.get("noise", False),
         min_ndim=spec.min_ndim,
+        fn_true=fn_true,
     )
