@@ -46,3 +46,7 @@ Deferred. The uniform-prefix signature stays, for two load-bearing reasons:
   of the frozen derivation (see reason 2).
 - Revisit only alongside a major version bump that regenerates downstream
   databanks.
+- Amended in part by ADR 0005 (2026-07-15): the *values* (and, for F4 and
+  the Gallagher functions, parts of the derivation) were corrected to match
+  the official reference, as a deliberate breaking change. The signature
+  decision above stands.

@@ -77,7 +77,9 @@ def update_plots() -> None:
         ax.set_title(name)
 
     plt.tight_layout()
-    plt.savefig("img/bbob_functions_overview_3d.png", dpi=300)
+    # dpi 150 keeps the tracked 3D overview binary reasonably small;
+    # 24x30 in -> 3600x4500 px, ample for the README embed
+    plt.savefig("img/bbob_functions_overview_3d.png", dpi=150)
     plt.close(fig)
 
 

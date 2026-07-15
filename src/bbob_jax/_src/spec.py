@@ -24,7 +24,7 @@ import jax
 import jax.numpy as jnp
 from jax.tree_util import Partial
 
-from bbob_jax._src import cec2017
+from bbob_jax._src import bbob_noisy, cec2017
 
 # Local
 from bbob_jax._src.bbob import (
@@ -61,6 +61,7 @@ from bbob_jax._src.cec2005 import (
     f2,
     f3,
     f4,
+    f4_true,
     f5,
     f6,
     f7,
@@ -81,11 +82,13 @@ from bbob_jax._src.cec2005 import (
     f22,
     f23,
     f24,
+    f24_true,
     f25,
 )
 from bbob_jax._src.factories import (
     BBOBFn,
     _add_f_max,
+    _make_bueche,
     _make_cec2005_conditioned_single,
     _make_cec2005_f5,
     _make_cec2005_f7,
@@ -183,6 +186,30 @@ def _bbob_tags(*, separable: bool, unimodal: bool) -> dict[str, bool]:
     return {"separable": separable, "unimodal": unimodal}
 
 
+def _bbob_noisy_tags(
+    *, separable: bool, unimodal: bool, model: str, severe: bool
+) -> dict[str, bool]:
+    """BBOB-noisy tag schema.
+
+    ``separable`` and ``unimodal`` describe the undisturbed base
+    function, mirroring the noiseless suite's labels. Exactly one
+    of the three noise-model flags is True. ``severe`` is False
+    for the moderate-noise group f101-f106. ``noise`` is True on
+    every row: the call signature is ``fn(x, key)``.
+    """
+    if model not in ("gauss", "uniform", "cauchy"):
+        raise ValueError(f"Unknown noise model: {model}")
+    return {
+        "separable": separable,
+        "unimodal": unimodal,
+        "gaussian_noise": model == "gauss",
+        "uniform_noise": model == "uniform",
+        "cauchy_noise": model == "cauchy",
+        "severe": severe,
+        "noise": True,
+    }
+
+
 def _cec_tags(
     *,
     unimodal: bool = False,
@@ -252,8 +279,8 @@ class FunctionSpec(NamedTuple):
     name : str
         Registry key of the function.
     suite : str
-        Benchmark suite, ``"bbob"``, ``"cec2005"`` or
-        ``"cec2017"``.
+        Benchmark suite, ``"bbob"``, ``"bbob_noisy"``,
+        ``"cec2005"`` or ``"cec2017"``.
     maker : Callable
         Factory constructing a problem instance. Called as
         ``maker(ndim=..., key=..., deterministic=...)`` and
@@ -269,6 +296,11 @@ class FunctionSpec(NamedTuple):
         Smallest ``ndim`` the function is defined for. Makers
         raise ``ValueError`` below it (e.g. CEC 2017 hybrids
         need one dimension per subcomponent kernel).
+    true_fn : Callable or None
+        For noisy functions, the undisturbed implementation with
+        the same bound-parameter signature minus ``key``;
+        ``problem()`` binds it as ``Problem.fn_true``. None for
+        noise-free functions (``fn_true`` is then ``fn`` itself).
     """
 
     name: str
@@ -278,6 +310,7 @@ class FunctionSpec(NamedTuple):
     bounds: tuple[float, float]
     x_opt_from: Callable[[dict[str, Any], int], jax.Array] = _default_x_opt
     min_ndim: int = 1
+    true_fn: Callable[..., jax.Array] | None = None
 
 
 #                                                                   BBOB table
@@ -454,7 +487,7 @@ BBOB_SPECS: tuple[FunctionSpec, ...] = (
     FunctionSpec(
         name="skew_rastrigin_bueche",
         suite="bbob",
-        maker=Partial(make_bbob, fn=skew_rastrigin_bueche),
+        maker=Partial(_make_bueche, fn=skew_rastrigin_bueche),
         tags=_bbob_tags(separable=True, unimodal=False),
         bounds=BBOB_BOUNDS,
     ),
@@ -487,6 +520,355 @@ BBOB_SPECS: tuple[FunctionSpec, ...] = (
         maker=Partial(_make_with_mat, fn=weierstrass, alpha=0.01, order="RLQ"),
         tags=_bbob_tags(separable=False, unimodal=False),
         bounds=BBOB_BOUNDS,
+    ),
+)
+
+#                                                             BBOB-noisy table
+# =============================================================================
+# f101-f130: eight base landscapes x three noise models (Gaussian, uniform,
+# Cauchy — always in that order within a triple), moderate severity for
+# f101-f106 and severe for f107-f130. ``true_fn`` is the shared undisturbed
+# base of each triple.
+
+BBOB_NOISY_SPECS: tuple[FunctionSpec, ...] = (
+    FunctionSpec(
+        name="bbob_noisy_f101",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f101),
+        tags=_bbob_noisy_tags(
+            separable=True, unimodal=True, model="gauss", severe=False
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.sphere_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f102",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f102),
+        tags=_bbob_noisy_tags(
+            separable=True, unimodal=True, model="uniform", severe=False
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.sphere_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f103",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f103),
+        tags=_bbob_noisy_tags(
+            separable=True, unimodal=True, model="cauchy", severe=False
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.sphere_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f104",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f104),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="gauss", severe=False
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.rosenbrock_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f105",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f105),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="uniform", severe=False
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.rosenbrock_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f106",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f106),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="cauchy", severe=False
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.rosenbrock_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f107",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f107),
+        tags=_bbob_noisy_tags(
+            separable=True, unimodal=True, model="gauss", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.sphere_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f108",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f108),
+        tags=_bbob_noisy_tags(
+            separable=True, unimodal=True, model="uniform", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.sphere_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f109",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f109),
+        tags=_bbob_noisy_tags(
+            separable=True, unimodal=True, model="cauchy", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.sphere_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f110",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f110),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="gauss", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.rosenbrock_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f111",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f111),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="uniform", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.rosenbrock_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f112",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f112),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="cauchy", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.rosenbrock_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f113",
+        suite="bbob_noisy",
+        maker=Partial(
+            _make_with_mat, fn=bbob_noisy.f113, alpha=10.0, order="LR"
+        ),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="gauss", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.step_ellipsoid_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f114",
+        suite="bbob_noisy",
+        maker=Partial(
+            _make_with_mat, fn=bbob_noisy.f114, alpha=10.0, order="LR"
+        ),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="uniform", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.step_ellipsoid_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f115",
+        suite="bbob_noisy",
+        maker=Partial(
+            _make_with_mat, fn=bbob_noisy.f115, alpha=10.0, order="LR"
+        ),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="cauchy", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.step_ellipsoid_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f116",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f116),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="gauss", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.ellipsoid_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f117",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f117),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="uniform", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.ellipsoid_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f118",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f118),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="cauchy", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.ellipsoid_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f119",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f119),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="gauss", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.different_powers_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f120",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f120),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="uniform", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.different_powers_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f121",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f121),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=True, model="cauchy", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.different_powers_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f122",
+        suite="bbob_noisy",
+        maker=Partial(
+            _make_with_mat, fn=bbob_noisy.f122, alpha=10.0, order="LQ"
+        ),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=False, model="gauss", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.schaffer_f7_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f123",
+        suite="bbob_noisy",
+        maker=Partial(
+            _make_with_mat, fn=bbob_noisy.f123, alpha=10.0, order="LQ"
+        ),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=False, model="uniform", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.schaffer_f7_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f124",
+        suite="bbob_noisy",
+        maker=Partial(
+            _make_with_mat, fn=bbob_noisy.f124, alpha=10.0, order="LQ"
+        ),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=False, model="cauchy", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.schaffer_f7_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f125",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f125),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=False, model="gauss", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        x_opt_from=_griewank_rosenbrock_x_opt,
+        true_fn=bbob_noisy.griewank_rosenbrock_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f126",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f126),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=False, model="uniform", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        x_opt_from=_griewank_rosenbrock_x_opt,
+        true_fn=bbob_noisy.griewank_rosenbrock_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f127",
+        suite="bbob_noisy",
+        maker=Partial(make_bbob, fn=bbob_noisy.f127),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=False, model="cauchy", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        x_opt_from=_griewank_rosenbrock_x_opt,
+        true_fn=bbob_noisy.griewank_rosenbrock_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f128",
+        suite="bbob_noisy",
+        maker=Partial(
+            _make_gallagher,
+            fn=bbob_noisy.f128,
+            num_peaks=101,
+            w_divisor=99,
+            alpha_first=1000.0,
+            y_minval=-5.0,
+            y_maxval=5.0,
+        ),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=False, model="gauss", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.gallagher_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f129",
+        suite="bbob_noisy",
+        maker=Partial(
+            _make_gallagher,
+            fn=bbob_noisy.f129,
+            num_peaks=101,
+            w_divisor=99,
+            alpha_first=1000.0,
+            y_minval=-5.0,
+            y_maxval=5.0,
+        ),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=False, model="uniform", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.gallagher_true,
+    ),
+    FunctionSpec(
+        name="bbob_noisy_f130",
+        suite="bbob_noisy",
+        maker=Partial(
+            _make_gallagher,
+            fn=bbob_noisy.f130,
+            num_peaks=101,
+            w_divisor=99,
+            alpha_first=1000.0,
+            y_minval=-5.0,
+            y_maxval=5.0,
+        ),
+        tags=_bbob_noisy_tags(
+            separable=False, unimodal=False, model="cauchy", severe=True
+        ),
+        bounds=BBOB_BOUNDS,
+        true_fn=bbob_noisy.gallagher_true,
     ),
 )
 
@@ -601,6 +983,7 @@ CEC2005_SPECS: tuple[FunctionSpec, ...] = (
         ),
         tags=_cec_tags(unimodal=True, noise=True),
         bounds=(-100.0, 100.0),
+        true_fn=f4_true,
     ),
     FunctionSpec(
         name="f5",
@@ -751,6 +1134,7 @@ CEC2005_SPECS: tuple[FunctionSpec, ...] = (
         tags=_cec_tags(composition=True, rotated=True, noise=True),
         bounds=(-5.0, 5.0),
         x_opt_from=_first_component_x_opt,
+        true_fn=f16,
     ),
     FunctionSpec(
         name="f18",
@@ -894,6 +1278,7 @@ CEC2005_SPECS: tuple[FunctionSpec, ...] = (
         ),
         bounds=(-5.0, 5.0),
         x_opt_from=_first_component_x_opt,
+        true_fn=f24_true,
     ),
     FunctionSpec(
         name="f25",
@@ -925,6 +1310,7 @@ CEC2005_SPECS: tuple[FunctionSpec, ...] = (
         ),
         bounds=(2.0, 5.0),
         x_opt_from=_first_component_x_opt,
+        true_fn=f24_true,
     ),
 )
 
@@ -1211,7 +1597,9 @@ CEC2017_SPECS: tuple[FunctionSpec, ...] = (
 #                                                                Derived views
 # =============================================================================
 
-SPECS: tuple[FunctionSpec, ...] = BBOB_SPECS + CEC2005_SPECS + CEC2017_SPECS
+SPECS: tuple[FunctionSpec, ...] = (
+    BBOB_SPECS + BBOB_NOISY_SPECS + CEC2005_SPECS + CEC2017_SPECS
+)
 SPEC_BY_NAME: dict[str, FunctionSpec] = {s.name: s for s in SPECS}
 
 if len(SPEC_BY_NAME) != len(SPECS):

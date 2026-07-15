@@ -10,6 +10,10 @@ import pytest
 
 from bbob_jax import (
     bbob_bounds,
+    bbob_noisy_bounds,
+    bbob_noisy_function_characteristics,
+    bbob_noisy_registry,
+    bbob_noisy_registry_original,
     cec2005_bounds,
     cec2005_function_characteristics,
     cec2005_registry,
@@ -24,6 +28,15 @@ from bbob_jax import (
 )
 
 BBOB_TAG_KEYS = {"separable", "unimodal"}
+BBOB_NOISY_TAG_KEYS = {
+    "separable",
+    "unimodal",
+    "gaussian_noise",
+    "uniform_noise",
+    "cauchy_noise",
+    "severe",
+    "noise",
+}
 CEC_TAG_KEYS = {
     "unimodal",
     "multimodal",
@@ -49,6 +62,18 @@ def test_bbob_key_sets_are_identical():
     assert set(bbob_bounds.keys()) == names
 
 
+def test_bbob_noisy_key_sets_are_identical():
+    names = set(bbob_noisy_registry.keys())
+    assert set(bbob_noisy_registry_original.keys()) == names
+    assert set(bbob_noisy_function_characteristics.keys()) == names
+    assert set(bbob_noisy_bounds.keys()) == names
+
+
+def test_bbob_noisy_names_cover_f101_to_f130():
+    expected = {f"bbob_noisy_f{i}" for i in range(101, 131)}
+    assert set(bbob_noisy_registry.keys()) == expected
+
+
 def test_cec2005_key_sets_are_identical():
     names = set(cec2005_registry.keys())
     assert set(cec2005_registry_original.keys()) == names
@@ -67,12 +92,16 @@ def test_suites_do_not_overlap():
     assert set(registry.keys()).isdisjoint(cec2005_registry.keys())
     assert set(registry.keys()).isdisjoint(cec2017_registry.keys())
     assert set(cec2005_registry.keys()).isdisjoint(cec2017_registry.keys())
+    assert set(bbob_noisy_registry.keys()).isdisjoint(registry.keys())
+    assert set(bbob_noisy_registry.keys()).isdisjoint(cec2005_registry.keys())
+    assert set(bbob_noisy_registry.keys()).isdisjoint(cec2017_registry.keys())
 
 
 @pytest.mark.parametrize(
     "tags_dict",
     [
         function_characteristics,
+        bbob_noisy_function_characteristics,
         cec2005_function_characteristics,
         cec2017_function_characteristics,
     ],
@@ -87,6 +116,26 @@ def test_bbob_tag_schema():
     for name, tags in function_characteristics.items():
         assert set(tags.keys()) == BBOB_TAG_KEYS, name
         assert all(isinstance(v, bool) for v in tags.values()), name
+
+
+def test_bbob_noisy_tag_schema():
+    for name, tags in bbob_noisy_function_characteristics.items():
+        assert set(tags.keys()) == BBOB_NOISY_TAG_KEYS, name
+        assert all(isinstance(v, bool) for v in tags.values()), name
+        assert tags["noise"], name
+        models = (
+            tags["gaussian_noise"],
+            tags["uniform_noise"],
+            tags["cauchy_noise"],
+        )
+        assert sum(models) == 1, name
+
+
+def test_bbob_noisy_severity_groups():
+    """f101-f106 are the moderate-noise group, f107-f130 severe."""
+    for name, tags in bbob_noisy_function_characteristics.items():
+        fid = int(name.removeprefix("bbob_noisy_f"))
+        assert tags["severe"] == (fid >= 107), name
 
 
 def test_cec2005_tag_schema():

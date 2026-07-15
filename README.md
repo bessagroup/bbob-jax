@@ -3,9 +3,9 @@
 | [**GitHub**](https://github.com/bessagroup/bbob-jax)
 | [**PyPI**](https://pypi.org/project/bbob-jax/)
 | [**Documentation**](https://bbob-jax.readthedocs.io/)
-| [**Zenodo**](https://doi.org/10.5281/zenodo.17426894) 
+| [**Zenodo**](https://doi.org/10.5281/zenodo.17426893) 
 
-JAX implementations of the **BBOB** benchmark functions (Finck et al., 2009) [^1], the **CEC 2005** benchmark functions (Suganthan et al., 2005) [^4] and the **CEC 2017** benchmark functions (Awad et al., 2016) [^5] for black-box optimization.
+JAX implementations of the **BBOB** noise-free and **BBOB-noisy** benchmark functions (Finck et al., 2009) [^1][^6], the **CEC 2005** benchmark functions (Suganthan et al., 2005) [^4] and the **CEC 2017** benchmark functions (Awad et al., 2016) [^5] for black-box optimization.
 
 **First publication:** October 17, 2025
 
@@ -13,11 +13,11 @@ JAX implementations of the **BBOB** benchmark functions (Finck et al., 2009) [^1
 
 ## Summary
 
-`bbob-jax` is a pure-[JAX](https://github.com/jax-ml/jax) reimplementation of three standard black-box optimization benchmark suites: the 24 noise-free **BBOB** functions (Finck et al., 2009), the 25 **CEC 2005** real-parameter functions (Suganthan et al., 2005) and the 29 **CEC 2017** bound-constrained functions (Awad et al., 2016; F2 was officially withdrawn). Every function is differentiable, JIT-compilable, and vectorizable via `vmap`, and is exposed through a simple registry that returns a ready-to-call objective together with its global minimum, as well as a `problem()` accessor that additionally bundles the optimum location, search-space bounds and metadata tags in one lookup. Both randomized (shifted and rotated) and deterministic factory variants are provided.
+`bbob-jax` is a pure-[JAX](https://github.com/jax-ml/jax) reimplementation of four standard black-box optimization benchmark suites: the 24 noise-free **BBOB** functions (Finck et al., 2009), the 30 **BBOB-noisy** functions f101–f130 (Finck et al., 2009), the 25 **CEC 2005** real-parameter functions (Suganthan et al., 2005) and the 29 **CEC 2017** bound-constrained functions (Awad et al., 2016; F2 was officially withdrawn). Every function is differentiable, JIT-compilable, and vectorizable via `vmap`, and is exposed through a simple registry that returns a ready-to-call objective together with its global minimum, as well as a `problem()` accessor that additionally bundles the optimum location, search-space bounds and metadata tags in one lookup. Both randomized (shifted and rotated) and deterministic factory variants are provided. Noisy functions are called as `fn(x, key)`; their undisturbed value is exposed as `Problem.fn_true` for COCO-style true-progress measurement.
 
 ## Statement of need
 
-The BBOB and CEC benchmark suites are cornerstones of black-box optimization research. This repository provides JAX reimplementations of all three: the 24 BBOB noise-free functions originally written in C, the 25 CEC 2005 real-parameter functions, and the 29 CEC 2017 bound-constrained functions (simple, hybrid and composition). Translating these suites to JAX enables automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance — making them ideal for research in optimization, machine learning, and evolutionary algorithms.
+The BBOB and CEC benchmark suites are cornerstones of black-box optimization research. This repository provides JAX reimplementations of all four: the 24 BBOB noise-free functions originally written in C, the 30 BBOB-noisy functions (Gaussian, uniform and Cauchy noise models at moderate and severe severity), the 25 CEC 2005 real-parameter functions, and the 29 CEC 2017 bound-constrained functions (simple, hybrid and composition). Translating these suites to JAX enables automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance — making them ideal for research in optimization, machine learning, and evolutionary algorithms.
 
 <div align="center">
   <img src="img/bbob_functions_overview_3d.png" alt="BBOB functions 3D overview" width="80%">
@@ -63,18 +63,18 @@ The BBOB and CEC benchmark suites are cornerstones of black-box optimization res
 
 If you use `bbob-jax` in your research or in a scientific publication, it is appreciated that you cite the paper below:
 
-**Zenodo** ([link](https://doi.org/10.5281/zenodo.17426894)):
+**Zenodo** ([link](https://doi.org/10.5281/zenodo.17426893)):
 ```bibtex
 @software{vanderSchelling2025,
   title        = {Black-box optimization benchmarking (bbob) problem
                    set for JAX},
   author       = {van der Schelling, M. P. and Bessa, M A.},
-  month        = {nov},
-  year         = {2025},
+  month        = {jul},
+  year         = {2026},
   publisher    = {Zenodo},
-  version      = {v1.0.0},
-  doi          = {10.5281/zenodo.17426894},
-  url          = {https://doi.org/10.5281/zenodo.17426894},
+  version      = {v2.0.0},
+  doi          = {10.5281/zenodo.17426893},
+  url          = {https://doi.org/10.5281/zenodo.17426893},
 }
 ```
 
@@ -122,6 +122,8 @@ This project is licensed under the BSD 3-Clause License. See [LICENSE](https://g
 [^4]: Suganthan, P. N., Hansen, N., Liang, J. J., and Deb, K. (2005), Problem Definitions and Evaluation Criteria for the CEC 2005 Special Session on Real-Parameter Optimization.
 
 [^5]: Awad, N. H., Ali, M. Z., Liang, J. J., Qu, B. Y., and Suganthan, P. N. (2016), Problem Definitions and Evaluation Criteria for the CEC 2017 Special Session and Competition on Single Objective Real-Parameter Numerical Optimization.
+
+[^6]: Finck, S., Hansen, N., Ros, R., and Auger, A. (2009), [Real-parameter black-box optimization benchmarking 2009: Noisy functions definitions](https://inria.hal.science/inria-00369466v2/document), INRIA.
 
 ## Related repositories
 

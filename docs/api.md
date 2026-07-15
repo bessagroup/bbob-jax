@@ -14,11 +14,18 @@ p = problem("rastrigin", ndim=2, key=jr.key(0))
 p.fn(p.x_opt)  # == p.f_opt
 p.bounds       # (-5.0, 5.0)
 p.tags         # {"separable": False, "unimodal": False}
-p.noisy        # False — noisy CEC functions are called as fn(x, key)
+p.noisy        # False — noisy functions are called as fn(x, key)
+p.fn_true      # undisturbed value; is p.fn itself for noise-free functions
 ```
 
 Pass `deterministic=True` for the zero-shift/identity-rotation instance
 (the `*_original` registries construct the same instances).
+
+For noisy functions (`p.noisy` is `True` — the BBOB-noisy suite and CEC
+2005 F4/F17/F24/F25), `p.fn(x, key)` returns the disturbed value an
+optimizer is allowed to see, while `p.fn_true(x)` returns the undisturbed
+value (base + boundary penalty + `f_opt`) with the same bound instance
+parameters — use it to measure true progress, COCO-style.
 
 ::: bbob_jax.problem
 
@@ -170,6 +177,113 @@ Individual benchmark function APIs. Public call pattern is via the root package 
 ::: bbob_jax.katsuura
 
 ::: bbob_jax.lunacek_bi_rastrigin
+
+## BBOB-noisy Registry
+
+Centralized access to the 30 BBOB-noisy benchmark functions (f101–f130)
+and their metadata.
+
+- `bbob_jax.bbob_noisy_registry`: Randomized variants of each BBOB-noisy function (names `bbob_noisy_f101` … `bbob_noisy_f130`). Every function is stochastic and called as `fn(x, key)`. Parameters are generated from seeds rather than derived from COCO instance IDs; the deterministic undisturbed path is cross-validated point-for-point against the compiled legacy reference code with reference-derived parameters injected (`scripts/crosscheck_bbob_noisy.py`).
+- `bbob_jax.bbob_noisy_registry_original`: Deterministic *instance* variants (zero shift, identity rotations, zero `f_opt`) — the noise stays stochastic.
+- `bbob_jax.bbob_noisy_function_characteristics`: Properties per function (`separable`/`unimodal` describe the undisturbed base; `gaussian_noise`/`uniform_noise`/`cauchy_noise` mark the noise model, exactly one per function; `severe` is False for the moderate group f101–f106; `noise` is always True).
+
+The suite is eight base landscapes × three noise models: Gaussian
+(multiplicative, log-normal), uniform (multiplicative) and Cauchy
+(additive, heavy-tailed), applied to the residual above the optimum. The
+×100 boundary penalty and `f_opt` are added outside the noise. Residuals
+below `1e-8` bypass the noise entirely (the noise gate), so
+`fn(x_opt, key) == f_opt` holds exactly. Semantics follow the legacy COCO
+code (`benchmarksnoisy.c`), which matches the published definition; see
+`docs/adr/0004`.
+
+::: bbob_jax.bbob_noisy_registry
+
+::: bbob_jax.bbob_noisy_registry_original
+
+::: bbob_jax.bbob_noisy_function_characteristics
+
+## BBOB-noisy Functions
+
+Individual BBOB-noisy benchmark function APIs (f101–f130). Access via the
+registries is recommended; the registry supplies internal parameters so the
+user-facing call is just `fn(x, key)`. The `*_true` functions are the
+undisturbed bases bound as `Problem.fn_true`.
+
+::: bbob_jax._src.bbob_noisy.f101
+
+::: bbob_jax._src.bbob_noisy.f102
+
+::: bbob_jax._src.bbob_noisy.f103
+
+::: bbob_jax._src.bbob_noisy.f104
+
+::: bbob_jax._src.bbob_noisy.f105
+
+::: bbob_jax._src.bbob_noisy.f106
+
+::: bbob_jax._src.bbob_noisy.f107
+
+::: bbob_jax._src.bbob_noisy.f108
+
+::: bbob_jax._src.bbob_noisy.f109
+
+::: bbob_jax._src.bbob_noisy.f110
+
+::: bbob_jax._src.bbob_noisy.f111
+
+::: bbob_jax._src.bbob_noisy.f112
+
+::: bbob_jax._src.bbob_noisy.f113
+
+::: bbob_jax._src.bbob_noisy.f114
+
+::: bbob_jax._src.bbob_noisy.f115
+
+::: bbob_jax._src.bbob_noisy.f116
+
+::: bbob_jax._src.bbob_noisy.f117
+
+::: bbob_jax._src.bbob_noisy.f118
+
+::: bbob_jax._src.bbob_noisy.f119
+
+::: bbob_jax._src.bbob_noisy.f120
+
+::: bbob_jax._src.bbob_noisy.f121
+
+::: bbob_jax._src.bbob_noisy.f122
+
+::: bbob_jax._src.bbob_noisy.f123
+
+::: bbob_jax._src.bbob_noisy.f124
+
+::: bbob_jax._src.bbob_noisy.f125
+
+::: bbob_jax._src.bbob_noisy.f126
+
+::: bbob_jax._src.bbob_noisy.f127
+
+::: bbob_jax._src.bbob_noisy.f128
+
+::: bbob_jax._src.bbob_noisy.f129
+
+::: bbob_jax._src.bbob_noisy.f130
+
+::: bbob_jax._src.bbob_noisy.sphere_true
+
+::: bbob_jax._src.bbob_noisy.rosenbrock_true
+
+::: bbob_jax._src.bbob_noisy.step_ellipsoid_true
+
+::: bbob_jax._src.bbob_noisy.ellipsoid_true
+
+::: bbob_jax._src.bbob_noisy.different_powers_true
+
+::: bbob_jax._src.bbob_noisy.schaffer_f7_true
+
+::: bbob_jax._src.bbob_noisy.griewank_rosenbrock_true
+
+::: bbob_jax._src.bbob_noisy.gallagher_true
 
 ## CEC 2017 Registry
 

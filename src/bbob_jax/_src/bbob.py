@@ -152,7 +152,8 @@ def rastrigin_seperable(
     z = jnp.matmul(alpha, tasy_func(temp, beta=0.2))
 
     return (
-        10.0 * (ndim - jnp.sum(jnp.cos(2.0 * jnp.pi * z))) * jnp.sum(z**2)
+        10.0 * (ndim - jnp.sum(jnp.cos(2.0 * jnp.pi * z)))
+        + jnp.sum(z**2)
         + f_opt
     )
 
@@ -194,13 +195,15 @@ def skew_rastrigin_bueche(
     ndim = x.shape[-1]
     i = jnp.arange(1, ndim + 1, dtype=x.dtype)
     s = jnp.power(10, 0.5 * ((i - 1) / (ndim - 1)))
-    odd_indices = jnp.arange(1, ndim + 1, 2)
+    # skew variables are the 1-based odd = 0-based even coordinates
+    skew_indices = jnp.arange(0, ndim, 2)
 
     z = s * tosz_func(x - x_opt)
 
-    # Modify odd indices
-    z_odd = jnp.where(z[odd_indices] > 0, z[odd_indices] * 10, z[odd_indices])
-    z = z.at[odd_indices].set(z_odd)
+    z_skew = jnp.where(
+        z[skew_indices] > 0, z[skew_indices] * 10, z[skew_indices]
+    )
+    z = z.at[skew_indices].set(z_skew)
 
     # Compute terms
     first_part = 10 * (ndim - jnp.sum(jnp.cos(2.0 * jnp.pi * z)))
@@ -699,7 +702,11 @@ def sum_of_different_powers(
     ndim = x.shape[-1]
     z = R @ (x - x_opt)
     idx = jnp.arange(1, ndim + 1, dtype=x.dtype)
-    return jnp.sum(sj.abs_st(z) ** (2 + 4 * (idx - 1) / (ndim - 1))) + f_opt
+    powers = jnp.sum(sj.abs_st(z) ** (2 + 4 * (idx - 1) / (ndim - 1)))
+    # sj.sqrt maps NaN to its zero branch; re-inject NaN so invalid
+    # inputs propagate (this function has no penalty term to carry it)
+    root = jnp.where(jnp.isnan(powers), powers, sj.sqrt(powers))
+    return cast(jax.Array, root + f_opt)
 
 
 def rastrigin(
@@ -744,7 +751,8 @@ def rastrigin(
     z = _mat @ tasy_func(tosz_func(R @ (x - x_opt)), beta=0.2)
 
     return (
-        10.0 * (ndim - jnp.sum(jnp.cos(2.0 * jnp.pi * z))) * jnp.sum(z**2)
+        10.0 * (ndim - jnp.sum(jnp.cos(2.0 * jnp.pi * z)))
+        + jnp.sum(z**2)
         + f_opt
     )
 
@@ -1108,6 +1116,8 @@ def _precompute_gallagher(
     key = jr.key(0)
     key = jr.fold_in(key, Q[0, 0])
     key1, key2 = jr.split(key)
+    # extra stream via fold_in so key1/key2 draws stay independent
+    key3 = jr.fold_in(key, 1)
 
     i = jnp.arange(1, num_peaks + 1, dtype=float)
     j = jnp.arange(0, num_peaks - 1, dtype=float)
@@ -1127,12 +1137,15 @@ def _precompute_gallagher(
 
     # Compute diagonal vectors instead of full (ndim x ndim) matrices.
     # lambda_func(ndim, alpha_i) = diag(alpha_i^(idx / (2*(ndim-1))))
-    # Then divided by alpha_i^0.25.
+    # Then divided by alpha_i^0.25. The reference draws an independent
+    # random permutation of the exponents for every peak.
     idx = jnp.arange(ndim, dtype=float)
-    # alpha: (num_peaks,), idx: (ndim,) -> c_diags: (num_peaks, ndim)
-    c_diags = jnp.power(
-        alpha[:, None], idx[None, :] / (2 * (ndim - 1))
-    ) / jnp.power(alpha[:, None], 0.25)
+    perm_keys = jr.split(key3, num_peaks)
+    perms = jax.vmap(lambda k: jr.permutation(k, idx))(perm_keys)
+    # alpha: (num_peaks,), perms: (num_peaks, ndim) -> (num_peaks, ndim)
+    c_diags = jnp.power(alpha[:, None], perms / (2 * (ndim - 1))) / jnp.power(
+        alpha[:, None], 0.25
+    )
 
     return w, y_rot, c_diags
 
