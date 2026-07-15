@@ -3,7 +3,7 @@
 | [**GitHub**](https://github.com/bessagroup/bbob-jax)
 | [**PyPI**](https://pypi.org/project/bbob-jax/)
 | [**Documentation**](https://bbob-jax.readthedocs.io/)
-| [**Zenodo**](https://doi.org/10.5281/zenodo.17426894) 
+| [**Zenodo**](https://doi.org/10.5281/zenodo.17426893) 
 
 JAX implementations of the **BBOB** noise-free and **BBOB-noisy** benchmark functions (Finck et al., 2009) [^1][^6], the **CEC 2005** benchmark functions (Suganthan et al., 2005) [^4] and the **CEC 2017** benchmark functions (Awad et al., 2016) [^5] for black-box optimization.
 
@@ -63,18 +63,18 @@ The BBOB and CEC benchmark suites are cornerstones of black-box optimization res
 
 If you use `bbob-jax` in your research or in a scientific publication, it is appreciated that you cite the paper below:
 
-**Zenodo** ([link](https://doi.org/10.5281/zenodo.17426894)):
+**Zenodo** ([link](https://doi.org/10.5281/zenodo.17426893)):
 ```bibtex
 @software{vanderSchelling2025,
   title        = {Black-box optimization benchmarking (bbob) problem
                    set for JAX},
   author       = {van der Schelling, M. P. and Bessa, M A.},
-  month        = {nov},
-  year         = {2025},
+  month        = {jul},
+  year         = {2026},
   publisher    = {Zenodo},
-  version      = {v1.0.0},
-  doi          = {10.5281/zenodo.17426894},
-  url          = {https://doi.org/10.5281/zenodo.17426894},
+  version      = {v2.0.0},
+  doi          = {10.5281/zenodo.17426893},
+  url          = {https://doi.org/10.5281/zenodo.17426893},
 }
 ```
 
