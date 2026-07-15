@@ -186,6 +186,37 @@ def f4(
     return base * (1 + 0.4 * jr.normal(key, shape=())) + f_opt
 
 
+def f4_true(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+) -> jax.Array:
+    """Undisturbed value of :func:`f4` (noise stripped).
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Optimal point.
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Rotation matrix (unused).
+    Q : jax.Array
+        Second rotation matrix (unused).
+
+    Returns
+    -------
+    jax.Array
+        Undisturbed function value(s).
+    """
+    z = x - x_opt
+    return jnp.sum(jnp.cumsum(z) ** 2) + f_opt
+
+
 def f5(
     x: jax.Array,
     x_opt: jax.Array,
@@ -1328,6 +1359,68 @@ def f24(
     """
     fns = _composition4_fns()
     fns[-1] = lambda z: _sphere_noisy_base(z, key)
+    sigma = jnp.full(10, 2.0)
+    lambda_ = jnp.array(
+        [
+            10,
+            5 / 20,
+            1,
+            5 / 32,
+            1,
+            5 / 100,
+            5 / 50,
+            1,
+            5 / 100,
+            5 / 100,
+        ]
+    )
+    bias = _composition_bias()
+    return (
+        hybrid_composition(
+            x, fns, sigma, lambda_, bias, x_opt, R, _f_max=_f_max
+        )
+        + f_opt
+    )
+
+
+def f24_true(
+    x: jax.Array,
+    x_opt: jax.Array,
+    f_opt: jax.Array,
+    R: jax.Array,
+    Q: jax.Array,
+    _f_max: jax.Array | None = None,
+) -> jax.Array:
+    """Undisturbed value of :func:`f24` (noise stripped).
+
+    Identical composition with the 10th component's noise
+    removed: a plain sphere instead of the noisy sphere. Also
+    the undisturbed value of :func:`f25`, which forwards to
+    :func:`f24`.
+
+    Parameters
+    ----------
+    x : jax.Array
+        Input array of shape (..., ndim).
+    x_opt : jax.Array
+        Matrix of component optima of shape (10, ndim).
+    f_opt : jax.Array
+        Optimal function value offset.
+    R : jax.Array
+        Stack of rotation matrices of shape (10, ndim, ndim).
+    Q : jax.Array
+        Unused.
+    _f_max : jax.Array, optional
+        Precomputed reference normalization values for composition
+        components, of shape (num_components,).
+
+    Returns
+    -------
+    jax.Array
+        Undisturbed function value(s).
+    """
+    fns = _composition4_fns()
+    fns[-1] = _sphere_base
     sigma = jnp.full(10, 2.0)
     lambda_ = jnp.array(
         [
