@@ -18,12 +18,9 @@ function with the same bound-parameter signature minus ``key``;
 :func:`bbob_jax._src.problem.problem` binds it as
 ``Problem.fn_true``.
 
-The local ``_tosz`` / ``_asym`` helpers replicate the legacy
-transforms exactly (elementwise application, sign-dependent
-constants, ``i/(D-1)`` exponent). The shared ``transforms.py``
-variants deviate from the reference for the noiseless suite and
-are pinned there by ``docs/adr/0001``; they are deliberately not
-reused here.
+The shared ``transforms.py`` ``tosz_func``/``tasy_func`` are
+reference-exact (since ADR 0005) and are reused here; the C
+cross-check of this suite doubles as their verification.
 """
 
 #                                                                       Modules
@@ -40,7 +37,12 @@ import softjax as sj
 # Local
 from bbob_jax._src.bbob import _precompute_gallagher
 from bbob_jax._src.noise import cauchy_noise, gauss_noise, uniform_noise
-from bbob_jax._src.transforms import lambda_func, penalty
+from bbob_jax._src.transforms import (
+    lambda_func,
+    penalty,
+    tasy_func,
+    tosz_func,
+)
 
 #                                                          Authorship & Credits
 # =============================================================================
@@ -48,66 +50,6 @@ __author__ = "Martin van der Schelling (M.P.vanderSchelling@tudelft.nl)"
 __credits__ = ["Martin van der Schelling"]
 __status__ = "Stable"
 # =============================================================================
-
-
-#                                                        Legacy transformations
-# =============================================================================
-
-
-def _tosz(x: jax.Array) -> jax.Array:
-    """Legacy monotone log-sine deformation (``monotoneTFosc``).
-
-    Applied elementwise to every component, with the
-    sign-dependent constants of the reference: ``(10, 7.9)`` for
-    positive inputs, ``(5.5, 3.1)`` for negative ones. Zero maps
-    to zero.
-
-    Parameters
-    ----------
-    x : jax.Array
-        Input array (any shape, applied elementwise).
-
-    Returns
-    -------
-    jax.Array
-        Deformed array of the same shape.
-    """
-    eps = 1e-12  # avoid log(0) in the unselected branch
-    x_hat = jnp.log(jnp.maximum(sj.abs_st(x), eps))
-    pos = jnp.exp(
-        x_hat + 0.049 * (jnp.sin(10.0 * x_hat) + jnp.sin(7.9 * x_hat))
-    )
-    neg = -jnp.exp(
-        x_hat + 0.049 * (jnp.sin(5.5 * x_hat) + jnp.sin(3.1 * x_hat))
-    )
-    return jnp.where(x > 0, pos, jnp.where(x < 0, neg, x))
-
-
-def _asym(x: jax.Array, beta: float) -> jax.Array:
-    """Legacy asymmetric transformation.
-
-    Positive components are raised to
-    ``1 + beta * (i / (ndim - 1)) * sqrt(x_i)`` (0-based ``i``),
-    negative ones pass through — the ``i/(D-1)`` exponent of the
-    reference, not the ``(i-1)/(D-1)`` of ``transforms.tasy_func``.
-
-    Parameters
-    ----------
-    x : jax.Array
-        Input array of shape (ndim,).
-    beta : float
-        Asymmetry strength.
-
-    Returns
-    -------
-    jax.Array
-        Transformed array of the same shape.
-    """
-    ndim = x.shape[-1]
-    idx = jnp.arange(ndim, dtype=x.dtype)
-    x_safe = jnp.maximum(x, 0.0)
-    exponent = 1.0 + beta * (idx / max(ndim - 1, 1)) * sj.sqrt(x_safe)
-    return jnp.where(x > 0, (x_safe + 1e-99) ** exponent, x)
 
 
 #                                                                Base residuals
@@ -168,7 +110,7 @@ def _ellipsoid_residual(
     ndim = x.shape[-1]
     i = jnp.arange(ndim, dtype=x.dtype)
     weights = jnp.power(1e4, i / max(ndim - 1, 1))
-    z = _tosz(R @ (x - x_opt))
+    z = tosz_func(R @ (x - x_opt))
     return jnp.sum(weights * z**2)
 
 
@@ -194,7 +136,7 @@ def _schaffer_f7_residual(
     ndim = x.shape[-1]
     if _mat is None:
         _mat = lambda_func(ndim, alpha=10.0) @ Q
-    z = _mat @ _asym(R @ (x - x_opt), beta=0.5)
+    z = _mat @ tasy_func(R @ (x - x_opt), beta=0.5)
 
     s = sj.sqrt(z[:-1] ** 2 + z[1:] ** 2)
     term = jnp.sum(
@@ -246,7 +188,7 @@ def _gallagher_residual(
         c_diags * rotated_diff**2, axis=-1
     )
     f = 10.0 - jnp.max(w * jnp.exp(exponents), axis=0)
-    return jnp.power(_tosz(f), 2)
+    return jnp.power(tosz_func(f), 2)
 
 
 #                                                          Undisturbed variants

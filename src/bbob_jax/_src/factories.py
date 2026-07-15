@@ -207,6 +207,25 @@ def _make_with_mat(
     return Partial(fn, **kw, _mat=mat), f_opt_val
 
 
+def _make_bueche(
+    fn: Callable,
+    ndim: int,
+    key: PRNGKeyArray | None = None,
+    deterministic: bool = False,
+) -> BBOBFn:
+    """Factory for skew_rastrigin_bueche (F4).
+
+    The reference makes the skewed (0-based even) coordinates of
+    the optimum non-negative (``xopt[::2] = |xopt[::2]|``) so the
+    x10 skew branch is active around the optimum.
+    """
+    partial_fn, f_opt_val = make_bbob(fn, ndim, key, deterministic)
+    kw = _partial_keywords(partial_fn)
+    even = jnp.arange(0, ndim, 2)
+    x_opt = kw["x_opt"].at[even].set(jnp.abs(kw["x_opt"][even]))
+    return Partial(fn, **{**kw, "x_opt": x_opt}), f_opt_val
+
+
 def _make_linear_slope(
     fn: Callable,
     ndim: int,

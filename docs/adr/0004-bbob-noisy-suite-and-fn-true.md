@@ -39,7 +39,8 @@ discrepancy.
 Note: the *current* COCO revival (`transform_obj_*_noise.c`) deviates
 from the legacy code — it drops the noise gate and uses a linear
 (unsquared) boundary penalty. The legacy code agrees with the published
-definition on both points, so legacy semantics are kept. Also kept: the
-suite-local `_tosz`/`_asym` transforms in `bbob_noisy.py` replicate the
-reference exactly rather than reusing `transforms.py`, whose noiseless
-variants deviate and are pinned by ADR 0001.
+definition on both points, so legacy semantics are kept. The suite
+originally carried local `_tosz`/`_asym` transforms because the shared
+`transforms.py` variants deviated from the reference; since ADR 0005
+corrected the shared transforms, the suite reuses them (the C
+cross-check is unchanged).
