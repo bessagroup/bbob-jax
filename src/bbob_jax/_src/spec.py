@@ -24,7 +24,7 @@ import jax
 import jax.numpy as jnp
 from jax.tree_util import Partial
 
-from bbob_jax._src import bbob_noisy, cec2017
+from bbob_jax._src import bbob_noisy, cec2013lsgo, cec2017
 
 # Local
 from bbob_jax._src.bbob import (
@@ -104,6 +104,7 @@ from bbob_jax._src.factories import (
     make_bbob,
     make_cec2005,
     make_cec2005_conditioned,
+    make_cec2013lsgo,
     make_cec2017,
     make_cec2017_composition,
     make_cec2017_hybrid,
@@ -175,6 +176,38 @@ def _cec2017_levy_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
     matching the official reference code (see ``cec2017.f9``).
     """
     return cast(jax.Array, kw["x_opt"] + kw["R"].T @ jnp.ones(ndim))
+
+
+def _lsgo_shift_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
+    """CEC 2013 LSGO separable / intrinsic functions: optimum is ``xopt``."""
+    return cast(jax.Array, kw["xopt"])
+
+
+def _lsgo_rosenbrock_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
+    """cec2013lsgo_f12: Rosenbrock's minimum is at ``z = ones``.
+
+    F12 is ``rosenbrock(x - xopt)`` and Rosenbrock's global minimum sits at
+    the all-ones point, so the minimizer is ``xopt + 1`` (not the shift).
+    """
+    return cast(jax.Array, kw["xopt"] + 1.0)
+
+
+def _lsgo_block_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
+    """CEC 2013 LSGO block functions: scatter block offsets into a vector.
+
+    Reconstructs the optimum from the bound per-block offsets (``xopt`` at
+    each block's coordinates). For the conforming/non-overlapping functions
+    (F4-F11, F13) this recovers ``xopt`` exactly and ``fn(x_opt) == 0``. For
+    F14 (conflicting overlap) shared coordinates disagree, so this is a
+    best-effort last-write-wins location: ``fn(x_opt)`` is NOT 0 — F14's
+    zero optimum is a true lower bound that is never attained.
+    """
+    x = jnp.zeros(ndim)
+    for idx, off in zip(kw["sub_idx"], kw["sub_off"], strict=True):
+        x = x.at[idx].set(off)
+    if kw["rem_idx"] is not None:
+        x = x.at[kw["rem_idx"]].set(kw["rem_off"])
+    return cast(jax.Array, x)
 
 
 #                                                                  Tag schemas
@@ -264,6 +297,23 @@ def _cec2017_tags(
         "composition": composition,
         "rotated": rotated,
         "structure_modified": structure_modified,
+    }
+
+
+def _cec2013lsgo_tags(*, category: str, rotated: bool) -> dict[str, bool]:
+    """CEC 2013 LSGO tag schema.
+
+    Exactly one of the four category flags is True (the Li et al. 2013
+    groups): ``separable`` (F1-F3), ``partially_separable`` (F4-F11),
+    ``overlapping`` (F12-F14) or ``non_separable`` (F15). ``rotated`` marks
+    the functions carrying subcomponent rotation matrices (F4-F11, F13, F14).
+    """
+    return {
+        "separable": category == "separable",
+        "partially_separable": category == "partially_separable",
+        "overlapping": category == "overlapping",
+        "non_separable": category == "non_separable",
+        "rotated": rotated,
     }
 
 
@@ -1594,11 +1644,54 @@ CEC2017_SPECS: tuple[FunctionSpec, ...] = (
 )
 
 
+#                                                        CEC 2013 LSGO table
+# =============================================================================
+# Fixed-instance suite: parameters are official constants, not seed-sampled;
+# each function is defined only at its native dimension. The rows are uniform,
+# so they are built programmatically from the per-function metadata in
+# ``cec2013lsgo.py``. Shift-only functions (F1-F3, F12, F15) locate their
+# optimum at ``xopt``; the rotated block functions (F4-F11, F13, F14) carry
+# rotation matrices and reconstruct their optimum from bound block offsets.
+
+_LSGO_SHIFT_IDS: tuple[int, ...] = (1, 2, 3, 12, 15)
+
+
+def _lsgo_spec(function_id: int) -> FunctionSpec:
+    """Build the FunctionSpec row for one CEC 2013 LSGO function."""
+    is_block = function_id not in _LSGO_SHIFT_IDS
+    if is_block:
+        x_opt_from = _lsgo_block_x_opt
+    elif function_id == 12:
+        x_opt_from = _lsgo_rosenbrock_x_opt
+    else:
+        x_opt_from = _lsgo_shift_x_opt
+    return FunctionSpec(
+        name=f"cec2013lsgo_f{function_id}",
+        suite="cec2013lsgo",
+        maker=Partial(make_cec2013lsgo, function_id=function_id),
+        tags=_cec2013lsgo_tags(
+            category=cec2013lsgo.CATEGORY[function_id], rotated=is_block
+        ),
+        bounds=cec2013lsgo.BOUNDS[function_id],
+        x_opt_from=x_opt_from,
+        min_ndim=cec2013lsgo.NATIVE_DIM[function_id],
+    )
+
+
+CEC2013LSGO_SPECS: tuple[FunctionSpec, ...] = tuple(
+    _lsgo_spec(fid) for fid in range(1, 16)
+)
+
+
 #                                                                Derived views
 # =============================================================================
 
 SPECS: tuple[FunctionSpec, ...] = (
-    BBOB_SPECS + BBOB_NOISY_SPECS + CEC2005_SPECS + CEC2017_SPECS
+    BBOB_SPECS
+    + BBOB_NOISY_SPECS
+    + CEC2005_SPECS
+    + CEC2017_SPECS
+    + CEC2013LSGO_SPECS
 )
 SPEC_BY_NAME: dict[str, FunctionSpec] = {s.name: s for s in SPECS}
 
