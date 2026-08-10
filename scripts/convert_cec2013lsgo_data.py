@@ -138,12 +138,14 @@ def main() -> None:
     for fid in range(1, N_FUNCTIONS + 1):
         arrays = convert_function(args.src, fid)
         out_path = OUT_DIR / f"F{fid}.npz"
-        np.savez_compressed(out_path, **arrays)
+        np.savez_compressed(out_path, **arrays)  # type: ignore[arg-type]
         keys = ", ".join(sorted(arrays))
         dim = arrays["xopt"].shape[0]
         size_kb = out_path.stat().st_size / 1024
-        print(f"F{fid:>2}: D={dim:>4}  [{keys}]  -> {out_path.name} "
-              f"({size_kb:.0f} KiB)")
+        print(
+            f"F{fid:>2}: D={dim:>4}  [{keys}]  -> {out_path.name} "
+            f"({size_kb:.0f} KiB)"
+        )
 
     total = sum(p.stat().st_size for p in OUT_DIR.glob("*.npz")) / 1024
     print(f"\nWrote {N_FUNCTIONS} files to {OUT_DIR} ({total:.0f} KiB total)")

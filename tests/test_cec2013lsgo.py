@@ -123,7 +123,11 @@ def test_registry_tags_bounds_consistency():
 def test_tag_schema(fid):
     """Exactly one category flag is set; ``rotated`` matches the block set."""
     tags = B.cec2013lsgo_function_characteristics[NAMES[fid - 1]]
-    categories = ("separable", "partially_separable", "overlapping",
-                  "non_separable")
+    categories = (
+        "separable",
+        "partially_separable",
+        "overlapping",
+        "non_separable",
+    )
     assert sum(tags[c] for c in categories) == 1
     assert tags["rotated"] == (fid in (4, 5, 6, 7, 8, 9, 10, 11, 13, 14))

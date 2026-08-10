@@ -74,21 +74,39 @@ NATIVE_DIM[14] = _OVERLAP_DIM
 
 # Search-space bounds per function id (Li et al. 2013, Table).
 BOUNDS: dict[int, tuple[float, float]] = {
-    1: (-100.0, 100.0), 2: (-5.0, 5.0), 3: (-32.0, 32.0),
-    4: (-100.0, 100.0), 5: (-5.0, 5.0), 6: (-32.0, 32.0), 7: (-100.0, 100.0),
-    8: (-100.0, 100.0), 9: (-5.0, 5.0), 10: (-32.0, 32.0), 11: (-100.0, 100.0),
-    12: (-100.0, 100.0), 13: (-100.0, 100.0), 14: (-100.0, 100.0),
+    1: (-100.0, 100.0),
+    2: (-5.0, 5.0),
+    3: (-32.0, 32.0),
+    4: (-100.0, 100.0),
+    5: (-5.0, 5.0),
+    6: (-32.0, 32.0),
+    7: (-100.0, 100.0),
+    8: (-100.0, 100.0),
+    9: (-5.0, 5.0),
+    10: (-32.0, 32.0),
+    11: (-100.0, 100.0),
+    12: (-100.0, 100.0),
+    13: (-100.0, 100.0),
+    14: (-100.0, 100.0),
     15: (-100.0, 100.0),
 }
 
 # Category tag per function id (see module docstring).
 CATEGORY: dict[int, str] = {
-    1: "separable", 2: "separable", 3: "separable",
-    4: "partially_separable", 5: "partially_separable",
-    6: "partially_separable", 7: "partially_separable",
-    8: "partially_separable", 9: "partially_separable",
-    10: "partially_separable", 11: "partially_separable",
-    12: "overlapping", 13: "overlapping", 14: "overlapping",
+    1: "separable",
+    2: "separable",
+    3: "separable",
+    4: "partially_separable",
+    5: "partially_separable",
+    6: "partially_separable",
+    7: "partially_separable",
+    8: "partially_separable",
+    9: "partially_separable",
+    10: "partially_separable",
+    11: "partially_separable",
+    12: "overlapping",
+    13: "overlapping",
+    14: "overlapping",
     15: "non_separable",
 }
 
@@ -271,6 +289,7 @@ def _make_block_evaluator(
             z = sub_transforms(z)
             total = total + weights[i] * sub_transfer(z)
         if rem_idx is not None:
+            assert rem_off is not None  # paired with rem_idx
             z = rem_transforms(x[rem_idx] - rem_off)
             total = total + rem_transfer(z)
         return total
@@ -297,8 +316,21 @@ f13 = _make_block_evaluator(_schwefel, _osz_asy, _sphere, _osz_asy)
 f14 = _make_block_evaluator(_schwefel, _osz_asy, _sphere, _osz_asy)
 
 _FUNCS: dict[int, Callable] = {
-    1: f1, 2: f2, 3: f3, 4: f4, 5: f5, 6: f6, 7: f7, 8: f8,
-    9: f9, 10: f10, 11: f11, 12: f12, 13: f13, 14: f14, 15: f15,
+    1: f1,
+    2: f2,
+    3: f3,
+    4: f4,
+    5: f5,
+    6: f6,
+    7: f7,
+    8: f8,
+    9: f9,
+    10: f10,
+    11: f11,
+    12: f12,
+    13: f13,
+    14: f14,
+    15: f15,
 }
 
 
@@ -308,9 +340,10 @@ _FUNCS: dict[int, Callable] = {
 
 def _load_raw(function_id: int) -> dict[str, np.ndarray]:
     """Load the vendored ``.npz`` constants for one function (NumPy)."""
-    ref = importlib.resources.files(
-        "bbob_jax._src.cec2013lsgo_data"
-    ) / f"F{function_id}.npz"
+    ref = (
+        importlib.resources.files("bbob_jax._src.cec2013lsgo_data")
+        / f"F{function_id}.npz"
+    )
     with importlib.resources.as_file(ref) as path:
         with np.load(path) as data:
             return {key: data[key] for key in data.files}
@@ -388,7 +421,7 @@ def lsgo_instance(
         chunks = []
         c_o = 0
         for s_i in sizes:
-            chunks.append(raw["xopt"][c_o:c_o + s_i])
+            chunks.append(raw["xopt"][c_o : c_o + s_i])
             c_o += s_i
         offsets = chunks
     else:

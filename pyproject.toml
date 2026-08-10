@@ -49,9 +49,6 @@ tests = [
   "pytest"
 ]
 
-[tool.setuptools.package-data]
-"bbob_jax._src.cec2013lsgo_data" = ["*.npz", "*.md"]
-
 [tool.mypy]
 disallow_untyped_defs = true
 exclude = ["tests"]
@@ -95,6 +92,9 @@ select = [
   "B", # flake8-bugbear
   "UP" # pyupgrade
 ]
+
+[tool.setuptools.package-data]
+"bbob_jax._src.cec2013lsgo_data" = ["*.npz", "*.md"]
 
 [tool.uv]
 package = true

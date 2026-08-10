@@ -38,7 +38,9 @@ import argparse
 import importlib.util
 import sys
 import types
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 # Third-party
 import numpy as np
@@ -66,7 +68,7 @@ def _bounds(fid: int) -> tuple[float, float]:
     return B.cec2013lsgo_bounds[f"cec2013lsgo_f{fid}"]
 
 
-def make_dmolina_oracle():
+def make_dmolina_oracle() -> Callable[[int, np.ndarray], float]:
     """Return ``eval_fn(fid, x) -> float`` backed by ``cec2013lsgo``."""
     from cec2013lsgo.cec2013 import Benchmark
 
@@ -83,18 +85,23 @@ def make_dmolina_oracle():
     return eval_fn
 
 
-def make_metabox_oracle(metabox_problem_dir: str):
+def make_metabox_oracle(
+    metabox_problem_dir: str,
+) -> Callable[[int, np.ndarray], float]:
     """Return ``eval_fn(fid, x)`` backed by MetaBox's NumPy reference.
 
     Loads ``cec2013lsgo_numpy`` directly (torch stubbed, minimal package
     skeleton) so no torch / gym dependencies are pulled in.
     """
-    torch_stub = types.ModuleType("torch")
+    torch_stub: Any = types.ModuleType("torch")
     torch_stub.Tensor = type("Tensor", (), {})  # satisfy jaxtyping's probe
     sys.modules.setdefault("torch", torch_stub)
 
-    def load_file(name, path, package=None):
+    def load_file(
+        name: str, path: str, package: str | None = None
+    ) -> types.ModuleType:
         spec = importlib.util.spec_from_file_location(name, path)
+        assert spec is not None and spec.loader is not None
         mod = importlib.util.module_from_spec(spec)
         if package is not None:
             mod.__package__ = package
@@ -108,7 +115,7 @@ def make_metabox_oracle(metabox_problem_dir: str):
         "environment.problem.SOO",
         "environment.problem.SOO.CEC2013LSGO",
     ):
-        skeleton = types.ModuleType(pkg)
+        skeleton: Any = types.ModuleType(pkg)
         skeleton.__path__ = []
         sys.modules[pkg] = skeleton
 
@@ -116,7 +123,8 @@ def make_metabox_oracle(metabox_problem_dir: str):
     bp = load_file(
         "environment.problem.basic_problem", str(base / "basic_problem.py")
     )
-    sys.modules["environment.problem"].basic_problem = bp
+    ep_mod: Any = sys.modules["environment.problem"]
+    ep_mod.basic_problem = bp
     ref = load_file(
         "environment.problem.SOO.CEC2013LSGO.cec2013lsgo_numpy",
         str(base / "SOO/CEC2013LSGO/cec2013lsgo_numpy.py"),
@@ -136,10 +144,15 @@ def make_metabox_oracle(metabox_problem_dir: str):
 def main() -> None:
     """Run the cross-check and optionally write the golden regression pins."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--oracle", choices=("dmolina", "metabox"),
-                        default="dmolina")
-    parser.add_argument("--metabox", type=str, default=None,
-                        help="MetaBox .../environment/problem dir")
+    parser.add_argument(
+        "--oracle", choices=("dmolina", "metabox"), default="dmolina"
+    )
+    parser.add_argument(
+        "--metabox",
+        type=str,
+        default=None,
+        help="MetaBox .../environment/problem dir",
+    )
     parser.add_argument("--n-points", type=int, default=5)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--rtol", type=float, default=1e-6)
@@ -147,6 +160,7 @@ def main() -> None:
     args = parser.parse_args()
 
     import jax
+
     jax.config.update("jax_enable_x64", True)
     import jax.numpy as jnp
     import jax.random as jr
@@ -179,13 +193,14 @@ def main() -> None:
         golden[f"x_{fid}"] = xs
         golden[f"f_{fid}"] = refs
 
-    print(f"\nworst relative deviation: {worst:.3e} "
-          f"(tolerance {args.rtol:.0e})")
+    print(
+        f"\nworst relative deviation: {worst:.3e} (tolerance {args.rtol:.0e})"
+    )
 
     if args.write_golden:
         out = Path(args.write_golden)
         out.parent.mkdir(parents=True, exist_ok=True)
-        np.savez_compressed(out, **golden)
+        np.savez_compressed(out, **golden)  # type: ignore[arg-type]
         print(f"wrote golden pins ({args.oracle}) to {out}")
 
 
