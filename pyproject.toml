@@ -93,5 +93,8 @@ select = [
   "UP" # pyupgrade
 ]
 
+[tool.setuptools.package-data]
+"bbob_jax._src.cec2013lsgo_data" = ["*.npz", "*.md"]
+
 [tool.uv]
 package = true

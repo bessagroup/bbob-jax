@@ -29,6 +29,7 @@ from jaxtyping import PRNGKeyArray
 
 # Local
 from bbob_jax._src.bbob import _precompute_gallagher
+from bbob_jax._src.cec2013lsgo import lsgo_instance
 from bbob_jax._src.composition import compute_composition_f_max
 from bbob_jax._src.sampling import (
     bernoulli_vector,
@@ -928,3 +929,51 @@ def _add_f_max(
     lambda_arr = jnp.asarray(comp_lambda, dtype=float)
     f_max = compute_composition_f_max(fns, lambda_arr, M, ndim)
     return Partial(fn, **kw, _f_max=f_max), f_opt_val
+
+
+def make_cec2013lsgo(
+    ndim: int,
+    key: PRNGKeyArray | None = None,
+    deterministic: bool = False,
+    *,
+    function_id: int,
+) -> BBOBFn:
+    """Factory for the CEC 2013 LSGO fixed-instance functions.
+
+    Unlike every other suite, LSGO instance parameters are fixed official
+    constants loaded from ``cec2013lsgo_data/`` — they are not sampled from
+    ``key`` and the function is only defined at its native dimension. This
+    maker therefore **validates and ignores** ``ndim`` and **ignores**
+    ``key`` and ``deterministic``: there is no randomized or deterministic
+    variant. See ``cec2013lsgo.py`` and ``CONTEXT.md``.
+
+    Parameters
+    ----------
+    ndim : int
+        Number of input dimensions. Must equal the function's native
+        dimension (1000, or 905 for the overlapping F13/F14).
+    key : PRNGKeyArray or None, optional
+        Ignored (accepted for registry-signature uniformity).
+    deterministic : bool, optional
+        Ignored (LSGO has no deterministic variant).
+    function_id : int
+        LSGO function id in ``1..15`` (bound by the spec row).
+
+    Returns
+    -------
+    BBOBFn
+        Tuple of (partial function, optimal value ``0.0``).
+
+    Raises
+    ------
+    ValueError
+        If ``ndim`` does not equal the function's native dimension.
+    """
+    fn, kwargs, native_dim = lsgo_instance(function_id)
+    if ndim != native_dim:
+        raise ValueError(
+            f"cec2013lsgo_f{function_id} is a fixed-instance function defined "
+            f"only at ndim == {native_dim}, got ndim == {ndim}"
+        )
+    f_opt = jnp.asarray(0.0)
+    return Partial(fn, **kwargs), f_opt

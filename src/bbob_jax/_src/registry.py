@@ -29,6 +29,7 @@ from bbob_jax._src.spec import (
     BBOB_NOISY_SPECS,
     BBOB_SPECS,
     CEC2005_SPECS,
+    CEC2013LSGO_SPECS,
     CEC2017_SPECS,
 )
 
@@ -69,4 +70,12 @@ cec2017_registry: dict[str, Callable] = {
 
 cec2017_registry_original: dict[str, Callable] = {
     s.name: Partial(s.maker, deterministic=True) for s in CEC2017_SPECS
+}
+
+# CEC 2013 LSGO is a fixed-instance suite (parameters are official constants,
+# not seed-sampled), so there is no ``*_original`` deterministic variant:
+# the single registry IS the canonical instance. Each maker validates ndim
+# against the function's native dimension and ignores ``key``.
+cec2013lsgo_registry: dict[str, Callable] = {
+    s.name: s.maker for s in CEC2013LSGO_SPECS
 }

@@ -105,6 +105,42 @@ This project builds on and complements established benchmarking efforts and tool
 
 If you find any **issues, bugs or problems** with this package, please use the [GitHub issue tracker](https://github.com/bessagroup/bbob-jax/issues) to report them.
 
+## Acknowledgements & third-party components
+
+The **CEC 2013 Large-Scale Global Optimization** suite (`cec2013lsgo_registry`,
+functions F1–F15) was ported to JAX from [MetaBox](https://github.com/MetaEvo/MetaBox)'s
+NumPy implementation (`MetaEvo/MetaBox@5565a28`, BSD 3-Clause, © 2023 MetaEvolution Lab),
+which in turn derives from Daniel Molina's [`cec2013lsgo`](https://github.com/dmolina/cec2013lsgo)
+reference code and the official CEC 2013 competition data. The vendored
+benchmark constants and full provenance are documented in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
+`src/bbob_jax/_src/cec2013lsgo_data/PROVENANCE.md`.
+
+If you use the LSGO suite, please cite the original benchmark, MetaBox, and
+`bbob-jax`:
+
+```bibtex
+@techreport{Li2013LSGO,
+  title       = {Benchmark Functions for the CEC 2013 Special Session and
+                 Competition on Large-Scale Global Optimization},
+  author      = {Li, Xiaodong and Tang, Ke and Omidvar, Mohammad Nabi and
+                 Yang, Zhenyu and Qin, Kai},
+  institution = {RMIT University},
+  year        = {2013},
+}
+
+@inproceedings{Ma2023MetaBox,
+  title     = {MetaBox: A Benchmark Platform for Meta-Black-Box Optimization
+               with Reinforcement Learning},
+  author    = {Ma, Zeyuan and others},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2023},
+  note      = {arXiv:2311.02708},
+}
+```
+
+MetaBox-v2 (NeurIPS 2025, arXiv:2505.17745) extends the platform used above.
+
 ## License
 
 Copyright (c) 2025, Martin van der Schelling
@@ -112,6 +148,10 @@ Copyright (c) 2025, Martin van der Schelling
 All rights reserved.
 
 This project is licensed under the BSD 3-Clause License. See [LICENSE](https://github.com/bessagroup/bbob-jax/blob/main/LICENSE) for the full license text.
+
+`bbob-jax` also incorporates third-party components under their own terms; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+[^5]: Li, X., Tang, K., Omidvar, M. N., Yang, Z., and Qin, K. (2013), Benchmark Functions for the CEC 2013 Special Session and Competition on Large-Scale Global Optimization. Technical Report, RMIT University.
 
 [^1]: Finck, S., Hansen, N., Ros, R., and Auger, A. (2009), [Real-parameter black-box optimization benchmarking 2009: Noiseless functions definitions](https://inria.hal.science/inria-00362633v2/document), INRIA.
 
