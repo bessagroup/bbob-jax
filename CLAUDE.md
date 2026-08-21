@@ -164,5 +164,5 @@ Tests live in `tests/` (`test_example.py` for BBOB, `test_bbob_noisy.py` for BBO
 - [l2co-tasks](https://github.com/bessagroup/l2co-tasks) — Optimization task definitions (BBOB, CEC 2005, PDE, spiral, …) compatible with the L2CO library.
 - [l2co_experiments](https://github.com/bessagroup/l2co_experiments) — Hydra + f3dasm experiment pipelines (dataset creation, training, rollouts, figures) for the L2CO studies.
 - [agentic-l2co](https://github.com/bessagroup/agentic-l2co) — An LLM-agent drop-in replacement for `l2co.L2COModel`, driving two-stage optimizer selection with an Ollama-hosted LLM.
-- [bbob-jax](https://github.com/bessagroup/bbob-jax) — JAX implementations of the BBOB and CEC 2005 black-box optimization benchmark functions.
+- [bbob-jax](https://github.com/bessagroup/bbob-jax) — JAX implementations of the BBOB, BBOB-noisy, CEC 2005, CEC 2017 and CEC 2013 LSGO black-box optimization benchmark functions.
 - [f3dasm](https://github.com/bessagroup/f3dasm) — Framework for Data-Driven Design and Analysis of Structures and Materials; provides `ExperimentData`, pipelines, and SLURM orchestration.
