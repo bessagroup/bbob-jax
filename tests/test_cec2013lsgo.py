@@ -104,6 +104,30 @@ def test_ndim_validation_raises():
 
 
 @pytest.mark.parametrize("fid", FIDS)
+def test_min_ndim_is_exact_not_a_floor(fid):
+    """``min_ndim`` is the *only* valid ``ndim``, not a lower bound.
+
+    For the CEC 2017 hybrids ``min_ndim`` is a floor: every larger ``ndim``
+    is valid too. The fixed-instance LSGO makers instead accept a single
+    dimension and reject ``native - 1`` and ``native + 1`` alike.
+
+    ``test_ndim_validation_raises`` above already covers one above-native
+    case (F13 at 1000), but incidentally and for a single function; this
+    sweeps all 15 and asserts through the public ``Problem.min_ndim``,
+    which is where the semantics are documented (see also
+    ``FunctionSpec.min_ndim``).
+    """
+    name = NAMES[fid - 1]
+    native = _ndim(fid)
+
+    assert B.problem(name, ndim=native, key=jr.key(0)).min_ndim == native
+
+    for bad in (native - 1, native + 1):
+        with pytest.raises(ValueError, match=f"only at ndim == {native}"):
+            B.problem(name, ndim=bad, key=jr.key(0))
+
+
+@pytest.mark.parametrize("fid", FIDS)
 def test_nan_propagation(fid):
     """NaN in the input propagates to a NaN output."""
     ndim = _ndim(fid)
