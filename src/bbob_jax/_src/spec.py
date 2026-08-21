@@ -330,7 +330,7 @@ class FunctionSpec(NamedTuple):
         Registry key of the function.
     suite : str
         Benchmark suite, ``"bbob"``, ``"bbob_noisy"``,
-        ``"cec2005"`` or ``"cec2017"``.
+        ``"cec2005"``, ``"cec2017"`` or ``"cec2013lsgo"``.
     maker : Callable
         Factory constructing a problem instance. Called as
         ``maker(ndim=..., key=..., deterministic=...)`` and
@@ -345,7 +345,10 @@ class FunctionSpec(NamedTuple):
     min_ndim : int
         Smallest ``ndim`` the function is defined for. Makers
         raise ``ValueError`` below it (e.g. CEC 2017 hybrids
-        need one dimension per subcomponent kernel).
+        need one dimension per subcomponent kernel). For the
+        fixed-instance ``"cec2013lsgo"`` suite this is the
+        *only* valid ``ndim`` (the native dimension, 1000 or
+        905), and the maker also raises above it.
     true_fn : Callable or None
         For noisy functions, the undisturbed implementation with
         the same bound-parameter signature minus ``key``;

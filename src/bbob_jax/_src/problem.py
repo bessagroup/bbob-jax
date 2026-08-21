@@ -60,7 +60,11 @@ class Problem(NamedTuple):
         Whether ``fn`` takes a PRNG key as second argument.
     min_ndim : int
         Smallest ``ndim`` the function is defined for;
-        construction raises ``ValueError`` below it.
+        construction raises ``ValueError`` below it. For the
+        fixed-instance CEC 2013 LSGO suite this is the *only*
+        valid ``ndim`` (the native dimension, 1000 or 905 for
+        the overlapping f13/f14), and construction also raises
+        above it.
     fn_true : Callable
         Undisturbed function, called as ``fn_true(x)``. For
         noisy functions this is the noise-free value (base +
