@@ -1,15 +1,38 @@
 # bbob-jax
 
 JAX implementations of black-box optimization benchmark suites (BBOB
-noise-free, BBOB-noisy, CEC 2005, CEC 2017), exposing differentiable,
-JIT-able, vmap-able problem instances.
+noise-free, BBOB-noisy, CEC 2005, CEC 2017, CEC 2013 LSGO), exposing
+differentiable, JIT-able, vmap-able problem instances.
 
 ## Language
 
 **Suite**:
-A published benchmark family (bbob, bbob_noisy, cec2005, cec2017). Each
-suite has its own registry pair, tag schema and bounds dict, all derived
-from the spec table.
+A published benchmark family (bbob, bbob_noisy, cec2005, cec2017,
+cec2013lsgo). Each suite has its own registry pair, tag schema and bounds
+dict, all derived from the spec table.
+
+**Fixed-instance suite**:
+A suite whose parameters are **fixed official constants**, not sampled
+from a key. CEC 2013 LSGO is the only one: its 15 functions load their
+shift / rotation / permutation / weight constants from
+`_src/cec2013lsgo_data/*.npz` (ported from MetaBox; see
+`THIRD_PARTY_NOTICES.md`). Consequences that break the usual `Instance`
+contract, all deliberate:
+- **No key sampling.** The maker `make_cec2013lsgo` *ignores* `key` — every
+  call returns the same canonical instance.
+- **Fixed dimension.** Each function is defined only at its *native* ndim
+  (1000, or 905 for the overlapping F13/F14); the maker *validates* `ndim`
+  and raises `ValueError` on any other value. There is no arbitrary-`ndim`
+  support.
+- **No deterministic variant.** `deterministic=True` is ignored and there
+  is no `cec2013lsgo_registry_original` — the single registry *is* the
+  canonical instance.
+- **`fn(x_opt) == f_opt` (== 0) holds for all but F14.** F14's conflicting
+  overlapping subcomponents cannot be simultaneously zeroed, so its 0 is a
+  true lower bound that is never attained (like the degenerate deterministic
+  CEC compositions).
+_Avoid_: treating LSGO like the seed-generated suites — it is not resizable
+and not randomized.
 
 **Spec row**:
 The single `FunctionSpec` entry that defines one benchmark function —

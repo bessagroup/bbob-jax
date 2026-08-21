@@ -26,7 +26,7 @@ name = "bbob-jax"
 readme = "README.md"
 requires-python = ">=3.12"
 urls = {repository = "https://github.com/bessagroup/bbob-jax"}
-version = "2.0.0"
+version = "2.1.0"
 
 [project.optional-dependencies]
 dev = [
@@ -92,6 +92,9 @@ select = [
   "B", # flake8-bugbear
   "UP" # pyupgrade
 ]
+
+[tool.setuptools.package-data]
+"bbob_jax._src.cec2013lsgo_data" = ["*.npz", "*.md"]
 
 [tool.uv]
 package = true
