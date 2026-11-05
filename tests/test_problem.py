@@ -8,6 +8,7 @@ argmin: fn(x_opt) == f_opt for every function in both suites
 compositions, whose weighting is degenerate).
 """
 
+import jax
 import jax.numpy as jnp
 import jax.random as jr
 import pytest
@@ -176,6 +177,49 @@ def test_noisy_problems_take_key(name):
     assert jnp.isfinite(value)
 
 
+@pytest.mark.parametrize("dim", [10, 30, 50])
+@pytest.mark.parametrize("seed", [0, 1])
+def test_f23_x_opt_is_the_minimizer_of_the_smoothed_function(dim, seed):
+    """F23 reports the point where its soft rounding maps onto o1.
+
+    F23 is F21 at ``y = m * round(2x)/2 + (1 - m) * x`` with a smooth
+    switch ``m``. At the component optimum ``o1`` the switch is not
+    exactly off, so ``f(o1)`` sits ~1e-2 above ``f_opt``. The map is
+    elementwise and invertible near ``o1``, so ``x_opt`` is the point
+    where ``y(x_opt) == o1``; there ``fn == f_opt`` to composition
+    precision. Checked in float64: ``f_opt`` (~360) is below float32's
+    resolution for this.
+    """
+    from bbob_jax._src.cec2005 import _f23_rounding
+
+    with jax.enable_x64(True):
+        p = problem("f23", ndim=dim, key=jr.key(seed))
+        o1 = p.fn.keywords["x_opt"][0]
+        assert jnp.max(jnp.abs(_f23_rounding(p.x_opt, o1) - o1)) < 1e-12
+        assert 0 < jnp.max(jnp.abs(p.x_opt - o1)) < 1e-2
+        gap = p.fn(p.x_opt) - p.f_opt
+        assert jnp.abs(gap) < 1e-7, f"dim={dim} seed={seed}: gap={gap}"
+        assert p.fn(o1) - p.f_opt > 1e-3  # the component optimum is not it
+
+
+@pytest.mark.parametrize("name", ["f4", "f17"])
+def test_cec2005_noise_never_goes_below_the_undisturbed_value(name):
+    """F4 and F17 multiply by ``1 + 0.4 * |N(0,1)|``, which is >= 1.
+
+    The CEC 2005 report (Suganthan et al. 2005) uses the absolute
+    value for both. Without it, F4's factor falls below 1 for N < 0 and
+    below 0 with probability ~0.6%, so a noisy value can drop below
+    ``f_opt`` and a run can reach -inf.
+    """
+    p = problem(name, ndim=10, key=jr.key(0))
+    x = p.x_opt + 0.5
+    noisy = jax.vmap(lambda k: p.fn(x, k))(jr.split(jr.key(1), 4000))
+    true = p.fn_true(x)
+    assert jnp.all(noisy >= true - 1e-9 * jnp.abs(true)), (
+        f"{name}: min noisy {float(noisy.min())} < undisturbed {float(true)}"
+    )
+
+
 @pytest.mark.parametrize("name", BBOB_NOISY_NAMES)
 def test_bbob_noisy_problem_fields_match_metadata_dicts(name):
     p = problem(name, ndim=3, key=jr.key(0))
@@ -226,12 +270,12 @@ def test_fn_true_is_deterministic_and_takes_no_key(name):
 
 
 def test_cec2005_fn_true_strips_the_noise():
-    """f4: fn == fn_true residual scaled by the noise draw."""
+    """f4: fn == fn_true residual scaled by 1 + 0.4 * |N(0,1)|."""
     p = problem("f4", ndim=4, key=jr.key(0))
     x = jr.uniform(jr.key(1), shape=(4,), minval=-10.0, maxval=10.0)
     key = jr.key(2)
     base = p.fn_true(x) - p.f_opt
-    expected = base * (1 + 0.4 * jr.normal(key)) + p.f_opt
+    expected = base * (1 + 0.4 * jnp.abs(jr.normal(key))) + p.f_opt
     assert jnp.allclose(p.fn(x, key), expected, rtol=1e-6)
 
 
