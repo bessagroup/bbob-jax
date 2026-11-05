@@ -177,6 +177,31 @@ def test_noisy_problems_take_key(name):
     assert jnp.isfinite(value)
 
 
+@pytest.mark.parametrize("dim", [10, 30, 50])
+@pytest.mark.parametrize("seed", [0, 1])
+def test_f23_x_opt_is_the_minimizer_of_the_smoothed_function(dim, seed):
+    """F23 reports the point where its soft rounding maps onto o1.
+
+    F23 is F21 at ``y = m * round(2x)/2 + (1 - m) * x`` with a smooth
+    switch ``m``. At the component optimum ``o1`` the switch is not
+    exactly off, so ``f(o1)`` sits ~1e-2 above ``f_opt``. The map is
+    elementwise and invertible near ``o1``, so ``x_opt`` is the point
+    where ``y(x_opt) == o1``; there ``fn == f_opt`` to composition
+    precision. Checked in float64: ``f_opt`` (~360) is below float32's
+    resolution for this.
+    """
+    from bbob_jax._src.cec2005 import _f23_rounding
+
+    with jax.enable_x64(True):
+        p = problem("f23", ndim=dim, key=jr.key(seed))
+        o1 = p.fn.keywords["x_opt"][0]
+        assert jnp.max(jnp.abs(_f23_rounding(p.x_opt, o1) - o1)) < 1e-12
+        assert 0 < jnp.max(jnp.abs(p.x_opt - o1)) < 1e-2
+        gap = p.fn(p.x_opt) - p.f_opt
+        assert jnp.abs(gap) < 1e-7, f"dim={dim} seed={seed}: gap={gap}"
+        assert p.fn(o1) - p.f_opt > 1e-3  # the component optimum is not it
+
+
 @pytest.mark.parametrize("name", ["f4", "f17"])
 def test_cec2005_noise_never_goes_below_the_undisturbed_value(name):
     """F4 and F17 multiply by ``1 + 0.4 * |N(0,1)|``, which is >= 1.

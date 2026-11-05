@@ -81,6 +81,7 @@ from bbob_jax._src.cec2005 import (
     f21,
     f22,
     f23,
+    f23_minimizer,
     f24,
     f24_true,
     f25,
@@ -135,6 +136,15 @@ def _default_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
 def _first_component_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
     """Compositions: the global minimum is the first component's optimum."""
     return cast(jax.Array, kw["x_opt"][0])
+
+
+def _f23_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
+    """f23: the point its soft rounding maps onto the first optimum.
+
+    ``fn(_first_component_x_opt)`` sits ~1e-2 above ``f_opt``, because the
+    smooth switch is not exactly off there; see :func:`f23_minimizer`.
+    """
+    return f23_minimizer(cast(jax.Array, kw["x_opt"][0]))
 
 
 def _linear_slope_x_opt(kw: dict[str, Any], ndim: int) -> jax.Array:
@@ -1299,7 +1309,7 @@ CEC2005_SPECS: tuple[FunctionSpec, ...] = (
             composition=True, rotated=True, structure_modified=True
         ),
         bounds=(-5.0, 5.0),
-        x_opt_from=_first_component_x_opt,
+        x_opt_from=_f23_x_opt,
     ),
     FunctionSpec(
         name="f24",
