@@ -910,6 +910,7 @@ def _add_f_max(
     ndim: int,
     key: PRNGKeyArray | None = None,
     deterministic: bool = False,
+    unrotated: bool = False,
     **factory_kwargs: Any,
 ) -> BBOBFn:
     """Wrap any CEC 2005 factory to add precomputed _f_max.
@@ -918,13 +919,18 @@ def _add_f_max(
     it is converted to ``jax.Array`` at call time so registry entries
     can store dtype-free Python tuples (see the ``_COMP*_LAMBDA``
     constants in ``spec.py``).
+
+    ``unrotated=True`` (F15) computes ``_f_max`` with identity matrices,
+    the ones the function evaluates with, as the official code does; the
+    random matrices the base factory binds are kept but unused.
     """
     partial_fn, f_opt_val = base_factory(
         fn, ndim, key, deterministic=deterministic, **factory_kwargs
     )
     kw = _partial_keywords(partial_fn)
     M = kw["R"]
-    # F15 uses identity stacks, but M is already set correctly by the factory
+    if unrotated:
+        M = jnp.broadcast_to(jnp.eye(ndim, dtype=M.dtype), M.shape)
     fns = comp_fns_builder()
     lambda_arr = jnp.asarray(comp_lambda, dtype=float)
     f_max = compute_composition_f_max(fns, lambda_arr, M, ndim)

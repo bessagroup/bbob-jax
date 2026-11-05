@@ -18,9 +18,9 @@ takes from the same key, ``jax.random.normal(key)``; the stub returns 0
 while the normalization is computed, because bbob-jax normalizes F24/F25
 noise-free where the official code draws the noise once there.
 
-* F15-F22: full values, point for point. F15 is a strict ``xfail``:
-  its height normalization is computed from rotated reference points
-  although F15 itself is unrotated (see ``F15_XFAIL``).
+* F15-F22: full values, point for point. F15 is unrotated: it
+  evaluates, and computes its height normalization, with identity
+  matrices, as the official code does.
 * F24, F25: the noise's contribution, ``fn(x, key) - fn_true(x)``
   against the official value with the draw minus the one with draw 0.
   Their full values differ by design: the non-continuous Scaffer and
@@ -53,17 +53,7 @@ DIMS = (10, 30)
 N_POINTS = 24
 ATOL = 1e-8
 RTOL = 1e-10
-# F15 is unrotated: f15 evaluates with identity matrices and ignores the
-# random ones its factory binds. Its height normalization, though, is
-# computed from those random matrices, where the official code uses the
-# identity, so its values differ (by up to ~6e2 at D = 10). Strict
-# xfail: fixing the normalization turns this into a failure to remove.
-F15_XFAIL = pytest.mark.xfail(
-    strict=True,
-    reason="F15's height normalization uses the bound random rotations; "
-    "the official code (and f15's own evaluation) uses the identity",
-)
-FULL_VALUE = (16, 17, 18, 19, 20, 21, 22)
+FULL_VALUE = (15, 16, 17, 18, 19, 20, 21, 22)
 NOISE_ONLY = (24, 25)
 SOURCES = ("aux.c", "def1.c", "def2.c", "def3.c", "def4.c")
 
@@ -205,7 +195,7 @@ def _assert_close(got, ref, label):
 @pytest.mark.parametrize("nx", DIMS, ids=lambda nx: f"D{nx}")
 @pytest.mark.parametrize(
     "func",
-    [pytest.param(15, marks=F15_XFAIL), *FULL_VALUE],
+    FULL_VALUE,
     ids=lambda f: f"f{f}",
 )
 def test_matches_official_reference(func, nx, reference):

@@ -14,6 +14,11 @@ Changes for 3.0.0. The package version stays 2.1.0 until that release.
   before damping. Values change away from the component optima;
   `f_opt`, the instances and task hashes do not. The weights are computed
   relative to the largest one in log space, so they never all underflow.
+- CEC 2005 F15: the height normalization of each component is computed
+  with identity matrices, as F15 evaluates and as the official code does.
+  Before, it used the random rotations the factory binds but F15 ignores,
+  which put values off by up to ~6e2 at D = 10. `f_opt`, the instances
+  and task hashes do not change.
 - CEC 2005 F17: the noise is `1 + 0.2*|N(0,1)|`, as in the official code
   (was `0.4`).
 - CEC 2005 F24/F25: the noisy sphere component uses `1 + 0.1*|N(0,1)|`, as

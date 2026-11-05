@@ -1197,6 +1197,7 @@ CEC2005_SPECS: tuple[FunctionSpec, ...] = (
             comp_fns_builder=_composition1_fns,
             comp_lambda=_COMP1_LAMBDA,
             fn=f15,
+            unrotated=True,
             num_components=_NC,
             minval=-5.0,
             maxval=5.0,
