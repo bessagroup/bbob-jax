@@ -970,6 +970,12 @@ _SOFT_ROUNDING_COMPONENTS = (
     "continuous."
 )
 
+_NOISE_FREE_NORMALIZATION = (
+    "The noisy sphere component is height-normalized with a value "
+    "computed without noise; the official code draws one noise sample "
+    "into that value at setup, which cannot be reproduced."
+)
+
 # Lambda values shared by composition function groups. Stored as plain
 # Python tuples (not jnp.array) so that import order does not bake in a
 # dtype before the user has had a chance to call
@@ -1395,7 +1401,10 @@ CEC2005_SPECS: tuple[FunctionSpec, ...] = (
         bounds=(-5.0, 5.0),
         x_opt_from=_first_component_x_opt,
         true_fn=f24_true,
-        deviations=(_SOFT_ROUNDING_COMPONENTS,),
+        deviations=(
+            _SOFT_ROUNDING_COMPONENTS,
+            _NOISE_FREE_NORMALIZATION,
+        ),
     ),
     FunctionSpec(
         name="f25",
@@ -1431,7 +1440,10 @@ CEC2005_SPECS: tuple[FunctionSpec, ...] = (
         bounds=(2.0, 5.0),
         x_opt_from=_first_component_x_opt,
         true_fn=f24_true,
-        deviations=(_SOFT_ROUNDING_COMPONENTS,),
+        deviations=(
+            _SOFT_ROUNDING_COMPONENTS,
+            _NOISE_FREE_NORMALIZATION,
+        ),
     ),
 )
 

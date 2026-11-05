@@ -26,7 +26,9 @@ Changes for 3.0.0. The package version stays 2.1.0 until that release.
   and noise-free. Before, it was recomputed on every call with the same
   draw, so the noise cancelled and `fn(x, key)` equalled `fn_true(x)`.
 - `cec2005_deviations` no longer lists the composition weights or the
-  F17/F24/F25 noise; F23–F25 keep their soft-rounding entries.
+  F17/F24/F25 noise; F23–F25 keep their soft-rounding entries, and F24/F25
+  gain one for their noise-free height normalization (the official code
+  draws the noise once into it at setup).
 
 ### Added
 

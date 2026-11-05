@@ -321,6 +321,12 @@ def test_function_specific_deviations():
     }
     for name in ("f23", "f24", "f25"):
         assert any("round" in e for e in _own_deviations(name)), name
+    for name in ("f24", "f25"):
+        assert any(
+            "normalization" in e and "without noise" in e
+            for e in _own_deviations(name)
+        ), name
+    assert not any("normalization" in e for e in _own_deviations("f23"))
     for name in COMPOSITION_NAMES:
         for entry in _own_deviations(name):
             assert "weight" not in entry.lower(), (name, entry)

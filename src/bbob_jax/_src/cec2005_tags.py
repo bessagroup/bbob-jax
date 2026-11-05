@@ -9,8 +9,9 @@ to a dict with boolean flags ``unimodal``, ``multimodal``,
 plain-language sentences, one per way the bbob-jax function departs
 from the official CEC 2005 definition. Every tuple starts with the
 suite-wide entries (generated instance parameters and ``f_opt``);
-F23-F25 add their soft rounding. The composition weights, height
-normalization and noise of F15-F25 follow the official C code and
+F23-F25 add their soft rounding, and F24/F25 their noise-free height
+normalization. The composition weights and noise of F15-F25, and the
+other functions' height normalization, follow the official C code and
 have no entries. It is the source for a table of deviations.
 
 Both are derived from the :class:`~bbob_jax._src.spec.FunctionSpec`
@@ -41,8 +42,8 @@ cec2005_deviations: dict[str, tuple[str, ...]] = {
 
 Maps the function name (``"f1"`` ... ``"f25"``) to a tuple of
 plain-language sentences. Every tuple starts with the suite-wide
-entries; F23-F25 add their soft rounding. Example, one row per
-deviation::
+entries; F23-F25 add their soft rounding and F24/F25 their noise-free
+normalization. Example, one row per deviation::
 
     for name, entries in cec2005_deviations.items():
         for sentence in entries:
