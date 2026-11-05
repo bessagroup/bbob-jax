@@ -1271,7 +1271,7 @@ def _f23_rounding(x: jax.Array, o: jax.Array) -> jax.Array:
     """
     mask = sj.heaviside(sj.abs(x - o) - 0.5)
     x_rounded = sj.round(2.0 * x) / 2.0
-    return mask * x_rounded + (1.0 - mask) * x
+    return cast(jax.Array, mask * x_rounded + (1.0 - mask) * x)
 
 
 def f23_minimizer(o: jax.Array, n_newton: int = 30) -> jax.Array:
@@ -1296,14 +1296,17 @@ def f23_minimizer(o: jax.Array, n_newton: int = 30) -> jax.Array:
     """
 
     def residual(xj: jax.Array, oj: jax.Array) -> jax.Array:
-        return _f23_rounding(xj, oj) - oj
+        return cast(jax.Array, _f23_rounding(xj, oj) - oj)
 
     slope = jax.grad(residual)
 
     def step(_: int, x: jax.Array) -> jax.Array:
-        return x - jax.vmap(residual)(x, o) / jax.vmap(slope)(x, o)
+        return cast(
+            jax.Array,
+            x - jax.vmap(residual)(x, o) / jax.vmap(slope)(x, o),
+        )
 
-    return jax.lax.fori_loop(0, n_newton, step, o)
+    return cast(jax.Array, jax.lax.fori_loop(0, n_newton, step, o))
 
 
 def f23(
