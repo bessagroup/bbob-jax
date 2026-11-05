@@ -156,7 +156,9 @@ def f4(
 ) -> jax.Array:
     """Shifted Schwefel 1.2 with Noise (F4).
 
-    Applies multiplicative Gaussian noise: ``f(x) * (1 + 0.4 * N(0,1))``.
+    Applies multiplicative absolute Gaussian noise, as in the CEC 2005
+    report: ``f(x) * (1 + 0.4 * |N(0,1)|)``. The factor is >= 1, so a noisy
+    value never falls below the undisturbed one or below ``f_opt``.
 
     ![F4 3D surface](img/3d/f4.png){ width=30% }
     ![F4 2D surface](img/2d/f4.png){ width=30% }
@@ -183,7 +185,7 @@ def f4(
     """
     z = x - x_opt
     base = jnp.sum(jnp.cumsum(z) ** 2)
-    return base * (1 + 0.4 * jr.normal(key, shape=())) + f_opt
+    return base * (1 + 0.4 * jnp.abs(jr.normal(key, shape=()))) + f_opt
 
 
 def f4_true(
@@ -663,8 +665,11 @@ def _non_continuous_rastrigin_base(z: jax.Array) -> jax.Array:
 
 
 def _sphere_noisy_base(z: jax.Array, key: jax.Array) -> jax.Array:
-    """Sphere with multiplicative absolute Gaussian noise."""
-    return jnp.sum(z**2) * (1 + 0.01 * jnp.abs(jr.normal(key, shape=())))
+    """Sphere with multiplicative absolute Gaussian noise (F24/F25).
+
+    ``sphere(z) * (1 + 0.1 * |N(0,1)|)``, as the official code.
+    """
+    return jnp.sum(z**2) * (1 + 0.1 * jnp.abs(jr.normal(key, shape=())))
 
 
 def _composition_bias() -> jax.Array:
@@ -841,7 +846,7 @@ def f17(
     """Rotated Hybrid Composition Function 1 with Noise (F17).
 
     Applies multiplicative absolute Gaussian noise to the base F16 result:
-    ``f(x) * (1 + 0.4 * |N(0,1)|)``.
+    ``f(x) * (1 + 0.2 * |N(0,1)|)``, as the official code.
 
     ![F17 3D surface](img/3d/f17.png){ width=30% }
     ![F17 2D surface](img/2d/f17.png){ width=30% }
@@ -870,7 +875,7 @@ def f17(
         Function value(s).
     """
     base = f16(x, x_opt, f_opt, R, Q, _f_max=_f_max) - f_opt
-    return base * (1 + 0.4 * jnp.abs(jr.normal(key, shape=()))) + f_opt
+    return base * (1 + 0.2 * jnp.abs(jr.normal(key, shape=()))) + f_opt
 
 
 def _composition2_fns() -> list:
@@ -1096,7 +1101,12 @@ def _composition3_fns() -> list:
 
 
 def _composition4_fns() -> list:
-    """F24/F25: 10 different components."""
+    """F24/F25: 10 different components.
+
+    The last is the plain sphere: the noise-free list the height
+    normalization (``_f_max``) is computed from. :func:`f24` swaps in
+    the noisy sphere.
+    """
     return [
         cec2005_weierstrass,
         _expanded_scaffer_f6_base,
@@ -1107,7 +1117,7 @@ def _composition4_fns() -> list:
         _non_continuous_scaffer_f6_base,
         _non_continuous_rastrigin_base,
         _elliptic_base,
-        _sphere_noisy_base,
+        _sphere_base,
     ]
 
 
@@ -1261,6 +1271,52 @@ def f22(
     )
 
 
+def _f23_rounding(x: jax.Array, o: jax.Array) -> jax.Array:
+    """F23's smoothed rounding: ``round(2x)/2`` where ``|x - o| >= 0.5``.
+
+    Elementwise. ``softjax`` smooths both the switch and the rounding so
+    that ``jax.grad`` works; see :func:`f23`.
+    """
+    mask = sj.heaviside(sj.abs(x - o) - 0.5)
+    x_rounded = sj.round(2.0 * x) / 2.0
+    return cast(jax.Array, mask * x_rounded + (1.0 - mask) * x)
+
+
+def f23_minimizer(o: jax.Array, n_newton: int = 30) -> jax.Array:
+    """The true minimizer of :func:`f23`: the point that rounds onto ``o``.
+
+    Solves ``_f23_rounding(x, o) == o`` coordinate by coordinate with
+    Newton's method from ``x = o``. The map is elementwise and has a
+    derivative near 1 there, so it converges in a few steps; 30 is a
+    wide margin.
+
+    Parameters
+    ----------
+    o : jax.Array
+        The first component's optimum, ``x_opt[0]``, of shape (ndim,).
+    n_newton : int, optional
+        Newton iterations, by default 30.
+
+    Returns
+    -------
+    jax.Array
+        The minimizer, of shape (ndim,).
+    """
+
+    def residual(xj: jax.Array, oj: jax.Array) -> jax.Array:
+        return cast(jax.Array, _f23_rounding(xj, oj) - oj)
+
+    slope = jax.grad(residual)
+
+    def step(_: int, x: jax.Array) -> jax.Array:
+        return cast(
+            jax.Array,
+            x - jax.vmap(residual)(x, o) / jax.vmap(slope)(x, o),
+        )
+
+    return cast(jax.Array, jax.lax.fori_loop(0, n_newton, step, o))
+
+
 def f23(
     x: jax.Array,
     x_opt: jax.Array,
@@ -1276,10 +1332,14 @@ def f23(
 
     Notes
     -----
-    The soft rounding approximation shifts the effective
-    minimum away from the theoretical optimum. At ``x_opt``,
-    the function value differs from ``f_opt`` by ~1e-2
-    across all tested dimensions.
+    The soft rounding moves the minimizer, not the minimum. At the first
+    component's optimum ``o1 = x_opt[0]`` the smooth switch is not exactly
+    off, so ``f(o1)`` sits ~1e-2 above ``f_opt``. The rounding is
+    elementwise and invertible near ``o1``, so the true minimizer is the
+    point where ``_f23_rounding(x) == o1``, about 6e-4 from ``o1`` in each
+    coordinate. There ``f == f_opt`` to composition precision (~1e-9 in
+    float64). :func:`f23_minimizer` computes it, and
+    ``problem("f23").x_opt`` reports it.
 
     ![F23 3D surface](img/3d/f23.png){ width=30% }
     ![F23 2D surface](img/2d/f23.png){ width=30% }
@@ -1305,12 +1365,7 @@ def f23(
     jax.Array
         Function value(s).
     """
-    # Soft rounding: y_j = round(2*x_j)/2 if |x_j - o1_j| >= 0.5
-    o = x_opt[0]
-    diff = sj.abs(x - o) - 0.5
-    mask = sj.heaviside(diff)
-    x_rounded = sj.round(2.0 * x) / 2.0
-    y = mask * x_rounded + (1.0 - mask) * x
+    y = _f23_rounding(x, x_opt[0])
     return f21(y, x_opt, f_opt, R, Q, _f_max=_f_max)
 
 
@@ -1329,7 +1384,11 @@ def f24(
     Rotation matrices with condition numbers
     [100, 50, 30, 10, 5, 5, 4, 3, 2, 2] are supplied by the factory.
     The 10th component (noisy sphere) applies multiplicative absolute
-    Gaussian noise: ``sphere(z) * (1 + 0.01 * |N(0,1)|)``.
+    Gaussian noise: ``sphere(z) * (1 + 0.1 * |N(0,1)|)``, as the
+    official code. Its height normalization is the precomputed,
+    noise-free ``_f_max`` the factory binds, so the noise acts; called
+    without ``_f_max``, the normalization is recomputed with the same
+    draw and the noise cancels.
 
     ![F24 3D surface](img/3d/f24.png){ width=30% }
     ![F24 2D surface](img/2d/f24.png){ width=30% }
@@ -1420,7 +1479,6 @@ def f24_true(
         Undisturbed function value(s).
     """
     fns = _composition4_fns()
-    fns[-1] = _sphere_base
     sigma = jnp.full(10, 2.0)
     lambda_ = jnp.array(
         [

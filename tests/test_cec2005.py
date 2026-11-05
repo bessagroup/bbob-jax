@@ -10,7 +10,12 @@ import jax.numpy as jnp
 import jax.random as jr
 import pytest
 
-from bbob_jax import cec2005_registry, cec2005_registry_original
+import bbob_jax
+from bbob_jax import (
+    cec2005_deviations,
+    cec2005_registry,
+    cec2005_registry_original,
+)
 from bbob_jax._src.cec2005_tags import cec2005_function_characteristics
 from bbob_jax._src.mesh import _create_mesh
 
@@ -270,6 +275,92 @@ _STRUCTURE_MODIFIED = {
     for name, chars in cec2005_function_characteristics.items()
     if chars.get("structure_modified", False)
 }
+
+_SHARED_DEVIATIONS = set.intersection(
+    *(set(entries) for entries in cec2005_deviations.values())
+)
+
+
+def _own_deviations(name: str) -> list[str]:
+    """The deviations listed for ``name`` beyond the suite-wide ones."""
+    return [e for e in cec2005_deviations[name] if e not in _SHARED_DEVIATIONS]
+
+
+def test_deviations_are_exported():
+    assert "cec2005_deviations" in bbob_jax.__all__
+    assert bbob_jax.cec2005_deviations is cec2005_deviations
+
+
+def test_every_function_has_a_plain_text_deviation_list():
+    assert set(cec2005_deviations) == set(cec2005_registry)
+    for name, entries in cec2005_deviations.items():
+        assert isinstance(entries, tuple) and entries, name
+        assert all(isinstance(e, str) and e.strip() for e in entries), name
+
+
+def test_suite_wide_deviations_name_the_generated_parameters():
+    """Every function lists that its parameters are not the official data."""
+    assert any("official data files" in e for e in _SHARED_DEVIATIONS)
+
+
+def test_every_structure_modified_function_lists_its_change():
+    for name in _STRUCTURE_MODIFIED:
+        assert _own_deviations(name), name
+
+
+def test_function_specific_deviations():
+    """Only the soft-rounded compositions deviate beyond the shared list.
+
+    The composition weights (F15-F25) and the noise of F17, F24 and F25
+    follow the official code, so they have no entries.
+    """
+    assert {n for n in cec2005_deviations if _own_deviations(n)} == {
+        "f23",
+        "f24",
+        "f25",
+    }
+    for name in ("f23", "f24", "f25"):
+        assert any("round" in e for e in _own_deviations(name)), name
+    for name in ("f24", "f25"):
+        assert any(
+            "normaliz" in e and "without noise" in e
+            for e in _own_deviations(name)
+        ), name
+    assert not any("normaliz" in e for e in _own_deviations("f23"))
+    for name in COMPOSITION_NAMES:
+        for entry in _own_deviations(name):
+            assert "weight" not in entry.lower(), (name, entry)
+            assert "cancels" not in entry, (name, entry)
+
+
+@pytest.mark.parametrize("name", ["f24", "f25"])
+def test_f24_f25_noise_acts(name):
+    """F24/F25's noisy sphere changes the value, by 0.1*|N| of its share.
+
+    The height normalization is fixed and noise-free, so the noise
+    factor does not cancel. The noisy component enters linearly, so
+    ``fn(x, key) - fn_true(x)`` is proportional to ``|N(key)|``, the
+    draw ``jr.normal(key)`` the component takes.
+    """
+    with jax.enable_x64(True):
+        p = bbob_jax.problem(name, ndim=10, key=jr.key(0))
+        # near the noisy sphere's optimum, where that component counts
+        x = p.fn.keywords["x_opt"][9] + 0.05
+        true = float(p.fn_true(x))
+        keys = [jr.key(k) for k in range(4)]
+        excess = [float(p.fn(x, k)) - true for k in keys]
+        draws = [abs(float(jr.normal(k))) for k in keys]
+    assert all(e > 0 for e in excess), excess
+    for e, n in zip(excess[1:], draws[1:]):
+        assert e / excess[0] == pytest.approx(n / draws[0], rel=1e-8)
+
+
+def test_f24_f25_share_the_noise_free_normalization():
+    """F24/F25 bind a fixed ``_f_max`` like F15-F23."""
+    for name in COMPOSITION_NAMES:
+        p = bbob_jax.problem(name, ndim=5, key=jr.key(0))
+        assert p.fn.keywords.get("_f_max") is not None, name
+        assert jnp.all(jnp.isfinite(p.fn.keywords["_f_max"])), name
 
 
 @pytest.mark.parametrize("name,fn", pytest_cec2005)

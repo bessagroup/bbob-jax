@@ -7,7 +7,7 @@ constants, T_asy off-by-one exponent, F3/F15 multiplicative core,
 F4 skew parity, F14 missing sqrt) without needing the external
 reference code. The full point-for-point comparison against the
 official implementation lives in
-``scripts/crosscheck_bbob_noiseless.py`` (not in CI).
+``test_crosscheck_bbob_noiseless.py``.
 """
 
 import jax.numpy as jnp

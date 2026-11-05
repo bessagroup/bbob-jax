@@ -2,8 +2,9 @@
 
 Validates the JAX port against reference regression pins
 (``data/cec2013lsgo_golden.npz``, generated from MetaBox's NumPy reference
-by ``scripts/crosscheck_cec2013lsgo.py``; re-confirm against the C-backed
-``dmolina`` oracle with that script), plus the structural contract every
+by ``scripts/crosscheck_cec2013lsgo.py``; ``test_crosscheck_cec2013lsgo.py``
+compares with the official C++ code, where F7 is a known deviation), plus
+the structural contract every
 suite must satisfy: scalar output, JIT / vmap / grad, ``fn(x_opt) == f_opt``
 (F14 excepted - see below), fixed-instance ``ndim`` validation, NaN
 propagation and registry/tags/bounds key consistency.

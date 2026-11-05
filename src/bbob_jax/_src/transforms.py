@@ -10,9 +10,9 @@ implementations; the CEC 2005 suite has its own kernels in
 ``tosz_func`` and ``tasy_func`` replicate the official reference
 code (``benchmarkshelper.c``: ``monotoneTFosc``; the asymmetric
 transform inlined per function) exactly; they are cross-checked
-against the compiled legacy C through both suites (see
-``scripts/crosscheck_bbob_noiseless.py`` and
-``scripts/crosscheck_bbob_noisy.py``). Before ADR 0005 both
+against the reference code through both suites (see
+``tests/test_crosscheck_bbob_noiseless.py`` and
+``tests/test_crosscheck_bbob_noisy.py``). Before ADR 0005 both
 carried deviations (first/last-element mask, single-branch
 constants, off-by-one exponent) — values produced by older
 versions are not comparable.
