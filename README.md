@@ -17,7 +17,7 @@ JAX implementations of five standard black-box optimization benchmark suites: **
 
 ## Statement of need
 
-The BBOB and CEC benchmark suites are cornerstones of black-box optimization research, but their reference implementations are C and MATLAB codebases that cannot be differentiated, JIT-compiled or batched. This repository reimplements all five suites in JAX, enabling automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance — making them ideal for research in optimization, machine learning, and evolutionary algorithms. Where an official reference implementation exists, the port is cross-checked point-for-point against it (`scripts/crosscheck_*.py`).
+The BBOB and CEC benchmark suites are cornerstones of black-box optimization research, but their reference implementations are C and MATLAB codebases that cannot be differentiated, JIT-compiled or batched. This repository reimplements all five suites in JAX, enabling automatic differentiation, just-in-time (JIT) compilation, and XLA-accelerated performance — making them ideal for research in optimization, machine learning, and evolutionary algorithms. Where an official reference implementation exists, the port is cross-checked point-for-point against it in CI (`tests/test_crosscheck_*.py`). For CEC 2005 the check covers the composition functions F15–F25 (weights, height normalization and noise); the suite's departures from the official definitions are listed in `bbob_jax.cec2005_deviations`.
 
 ## Benchmark suites
 

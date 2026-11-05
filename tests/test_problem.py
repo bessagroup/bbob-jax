@@ -204,7 +204,7 @@ def test_f23_x_opt_is_the_minimizer_of_the_smoothed_function(dim, seed):
 
 @pytest.mark.parametrize("name", ["f4", "f17"])
 def test_cec2005_noise_never_goes_below_the_undisturbed_value(name):
-    """F4 and F17 multiply by ``1 + 0.4 * |N(0,1)|``, which is >= 1.
+    """F4 and F17 multiply by ``1 + s * |N(0,1)|`` (s = 0.4 and 0.2), >= 1.
 
     The CEC 2005 report (Suganthan et al. 2005) uses the absolute
     value for both. Without it, F4's factor falls below 1 for N < 0 and
@@ -281,12 +281,12 @@ def test_cec2005_fn_true_strips_the_noise():
 
 def test_cec2005_f17_fn_true_is_f16():
     """f17's undisturbed value is the f16 composition with f17's
-    own instance parameters."""
+    own instance parameters; the noise is 1 + 0.2 * |N(0,1)|."""
     p = problem("f17", ndim=4, key=jr.key(0))
     x = jr.uniform(jr.key(1), shape=(4,), minval=-5.0, maxval=5.0)
     key = jr.key(2)
     base = p.fn_true(x) - p.f_opt
-    expected = base * (1 + 0.4 * jnp.abs(jr.normal(key))) + p.f_opt
+    expected = base * (1 + 0.2 * jnp.abs(jr.normal(key))) + p.f_opt
     assert jnp.allclose(p.fn(x, key), expected, rtol=1e-6)
 
 

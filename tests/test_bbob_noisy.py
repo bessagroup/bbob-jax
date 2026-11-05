@@ -8,7 +8,7 @@ value from its ``fn_true`` residual and the noise-model formulas
 three models' distributions with a fixed key set (fully
 deterministic, no flakiness). The deterministic undisturbed path
 is additionally cross-checked against the compiled legacy C
-reference by ``scripts/crosscheck_bbob_noisy.py`` (not in CI).
+reference by ``test_crosscheck_bbob_noisy.py``.
 """
 
 import jax

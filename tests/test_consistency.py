@@ -15,6 +15,7 @@ from bbob_jax import (
     bbob_noisy_registry,
     bbob_noisy_registry_original,
     cec2005_bounds,
+    cec2005_deviations,
     cec2005_function_characteristics,
     cec2005_registry,
     cec2005_registry_original,
@@ -79,6 +80,7 @@ def test_cec2005_key_sets_are_identical():
     assert set(cec2005_registry_original.keys()) == names
     assert set(cec2005_function_characteristics.keys()) == names
     assert set(cec2005_bounds.keys()) == names
+    assert set(cec2005_deviations.keys()) == names
 
 
 def test_cec2017_key_sets_are_identical():
