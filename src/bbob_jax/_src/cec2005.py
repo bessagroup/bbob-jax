@@ -156,7 +156,9 @@ def f4(
 ) -> jax.Array:
     """Shifted Schwefel 1.2 with Noise (F4).
 
-    Applies multiplicative Gaussian noise: ``f(x) * (1 + 0.4 * N(0,1))``.
+    Applies multiplicative absolute Gaussian noise, as in the CEC 2005
+    report: ``f(x) * (1 + 0.4 * |N(0,1)|)``. The factor is >= 1, so a noisy
+    value never falls below the undisturbed one or below ``f_opt``.
 
     ![F4 3D surface](img/3d/f4.png){ width=30% }
     ![F4 2D surface](img/2d/f4.png){ width=30% }
@@ -183,7 +185,7 @@ def f4(
     """
     z = x - x_opt
     base = jnp.sum(jnp.cumsum(z) ** 2)
-    return base * (1 + 0.4 * jr.normal(key, shape=())) + f_opt
+    return base * (1 + 0.4 * jnp.abs(jr.normal(key, shape=()))) + f_opt
 
 
 def f4_true(
