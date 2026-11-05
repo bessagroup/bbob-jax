@@ -1,10 +1,8 @@
 # Changelog
 
-## Unreleased
+## 3.0.0 - 2026-11-05
 
-Changes for 3.0.0. The package version stays 2.1.0 until that release.
-
-### Changed (3.0.0, changes values)
+### Changed (changes values)
 
 - CEC 2005 F15–F25: the composition weights follow the official
   `calc_weight` (`src/def2.c`): every weight but the largest is damped by
