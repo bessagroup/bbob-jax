@@ -63,6 +63,7 @@ Centralized access to the CEC 2005 benchmark functions and their metadata.
 - `bbob_jax.cec2005_registry`: Randomized variants of each CEC 2005 function. Parameters (shift vectors, rotation matrices) are generated from seeds rather than loaded from the official CEC 2005 data files — results will not match published CEC 2005 benchmarking results.
 - `bbob_jax.cec2005_registry_original`: Deterministic baseline variants (no random shift/rotation, no output offset). Useful for debugging and reference.
 - `bbob_jax.cec2005_function_characteristics`: Properties per function (unimodal/multimodal/composition/rotated flags, plus `noise` for the stochastic functions whose call signature is `fn(x, key)`, and `structure_modified` where the JAX implementation deviates from the official spec).
+- `bbob_jax.cec2005_deviations`: For each function, a tuple of plain-language sentences, one per way it departs from the official CEC 2005 definition. Every function lists the generated instance parameters and `f_opt`; F23–F25 add their smoothed rounding. Meant for generating a table of deviations.
 
 ::: bbob_jax.cec2005_registry
 
@@ -70,11 +71,13 @@ Centralized access to the CEC 2005 benchmark functions and their metadata.
 
 ::: bbob_jax.cec2005_function_characteristics
 
+::: bbob_jax.cec2005_deviations
+
 ## CEC 2005 Functions
 
 Individual CEC 2005 benchmark function APIs (F1–F25). Access via the registries is recommended; the registry supplies internal parameters so the user-facing call is just `fn(x)`.
 
-> **Note:** Parameters are generated from seeds rather than loaded from the official CEC 2005 data files. The stochastic functions (F4, F17, F24, F25) take a PRNG key as second argument: `fn(x, key)`. Functions F23–F25 replace the non-continuous rounding step with a smooth approximation (`structure_modified`). See `cec2005_function_characteristics` for per-function flags.
+> **Note:** Parameters are generated from seeds rather than loaded from the official CEC 2005 data files. The stochastic functions (F4, F17, F24, F25) take a PRNG key as second argument: `fn(x, key)`. Functions F23–F25 replace the non-continuous rounding step with a smooth approximation (`structure_modified`). See `cec2005_function_characteristics` for per-function flags and `cec2005_deviations` for every known departure from the official definitions.
 
 ::: bbob_jax._src.cec2005.f1
 
@@ -183,7 +186,7 @@ Individual benchmark function APIs. Public call pattern is via the root package 
 Centralized access to the 30 BBOB-noisy benchmark functions (f101–f130)
 and their metadata.
 
-- `bbob_jax.bbob_noisy_registry`: Randomized variants of each BBOB-noisy function (names `bbob_noisy_f101` … `bbob_noisy_f130`). Every function is stochastic and called as `fn(x, key)`. Parameters are generated from seeds rather than derived from COCO instance IDs; the deterministic undisturbed path is cross-validated point-for-point against the compiled legacy reference code with reference-derived parameters injected (`scripts/crosscheck_bbob_noisy.py`).
+- `bbob_jax.bbob_noisy_registry`: Randomized variants of each BBOB-noisy function (names `bbob_noisy_f101` … `bbob_noisy_f130`). Every function is stochastic and called as `fn(x, key)`. Parameters are generated from seeds rather than derived from COCO instance IDs; the deterministic undisturbed path is cross-validated point-for-point against the compiled legacy reference code with reference-derived parameters injected (`tests/test_crosscheck_bbob_noisy.py`, run in CI).
 - `bbob_jax.bbob_noisy_registry_original`: Deterministic *instance* variants (zero shift, identity rotations, zero `f_opt`) — the noise stays stochastic.
 - `bbob_jax.bbob_noisy_function_characteristics`: Properties per function (`separable`/`unimodal` describe the undisturbed base; `gaussian_noise`/`uniform_noise`/`cauchy_noise` mark the noise model, exactly one per function; `severe` is False for the moderate group f101–f106; `noise` is always True).
 
@@ -289,7 +292,7 @@ undisturbed bases bound as `Problem.fn_true`.
 
 Centralized access to the CEC 2017 benchmark functions and their metadata.
 
-- `bbob_jax.cec2017_registry`: Randomized variants of each CEC 2017 function (names `cec2017_f1`, `cec2017_f3` … `cec2017_f30`; F2 was officially withdrawn). Parameters (shift vectors, rotation matrices, hybrid shuffle permutations) are generated from seeds rather than loaded from the official data files — results will not match published CEC 2017 benchmarking results, but the implementations are cross-validated point-for-point against the compiled official reference code with the official data injected (`scripts/crosscheck_cec2017.py`).
+- `bbob_jax.cec2017_registry`: Randomized variants of each CEC 2017 function (names `cec2017_f1`, `cec2017_f3` … `cec2017_f30`; F2 was officially withdrawn). Parameters (shift vectors, rotation matrices, hybrid shuffle permutations) are generated from seeds rather than loaded from the official data files — results will not match published CEC 2017 benchmarking results, but the implementations are cross-validated point-for-point against the compiled official reference code with the official data injected (`tests/test_crosscheck_cec2017.py`, run in CI).
 - `bbob_jax.cec2017_registry_original`: Deterministic baseline variants (zero shift, identity rotations, identity shuffles, no output offset).
 - `bbob_jax.cec2017_function_characteristics`: Properties per function (`unimodal`/`multimodal`/`hybrid`/`composition`/`rotated`/`structure_modified` flags; the suite has no stochastic functions).
 

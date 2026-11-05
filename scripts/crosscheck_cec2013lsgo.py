@@ -1,13 +1,19 @@
 """Cross-validate the CEC 2013 LSGO suite against an external reference.
 
-One-off development validation (not part of CI). Unlike the CEC 2005/2017
-crosschecks, LSGO's parameters are the official fixed constants, so this
-script compares the bbob-jax port directly against a reference
-implementation on random points in each function's box, at the native
-dimension, in float64.
+Development tool, kept for regenerating the golden pins. The live
+comparison with the official C++ code runs in CI as
+``tests/test_crosscheck_cec2013lsgo.py``, which compiles that code
+directly (the ``cec2013lsgo`` 2018 sdist does not build on current Python
+and setuptools) and records F7 as a known deviation: bbob-jax and MetaBox
+apply T_osz/T_asy to F7's separable remainder, the C++ does not. LSGO's
+parameters are the official fixed constants, so this script compares the
+bbob-jax port directly against a reference implementation on random
+points in each function's box, at the native dimension, in float64.
 
-Canonical oracle: Daniel Molina's ``cec2013lsgo`` package (a C-backed
-wrapper over the official competition code)::
+Default oracle: Daniel Molina's ``cec2013lsgo`` package (a C-backed
+wrapper over the official competition code). Its 2.2 sdist imports
+``setuptools.command.test`` (removed in setuptools 72) and Cython at
+setup time, so it only installs with an older toolchain::
 
     pip install cec2013lsgo            # needs a C toolchain; internet
     uv run --no-sync python scripts/crosscheck_cec2013lsgo.py
@@ -24,8 +30,9 @@ Use ``--write-golden tests/data/cec2013lsgo_golden.npz`` to (re)generate the
 CI regression pins. Options: ``--n-points``, ``--seed``, ``--rtol``.
 
 The committed golden was generated with ``--oracle metabox`` (MetaBox
-``MetaEvo/MetaBox@5565a28``); re-run with the default ``dmolina`` oracle on
-a networked machine to confirm against the C-backed official code.
+``MetaEvo/MetaBox@5565a28``). The comparison with the official C++ code
+is ``tests/test_crosscheck_cec2013lsgo.py``: it agrees on every function
+but F7, so the golden pins F7 to MetaBox's version, not the official one.
 """
 
 #                                                                       Modules

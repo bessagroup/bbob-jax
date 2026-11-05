@@ -665,8 +665,11 @@ def _non_continuous_rastrigin_base(z: jax.Array) -> jax.Array:
 
 
 def _sphere_noisy_base(z: jax.Array, key: jax.Array) -> jax.Array:
-    """Sphere with multiplicative absolute Gaussian noise."""
-    return jnp.sum(z**2) * (1 + 0.01 * jnp.abs(jr.normal(key, shape=())))
+    """Sphere with multiplicative absolute Gaussian noise (F24/F25).
+
+    ``sphere(z) * (1 + 0.1 * |N(0,1)|)``, as the official code.
+    """
+    return jnp.sum(z**2) * (1 + 0.1 * jnp.abs(jr.normal(key, shape=())))
 
 
 def _composition_bias() -> jax.Array:
@@ -843,7 +846,7 @@ def f17(
     """Rotated Hybrid Composition Function 1 with Noise (F17).
 
     Applies multiplicative absolute Gaussian noise to the base F16 result:
-    ``f(x) * (1 + 0.4 * |N(0,1)|)``.
+    ``f(x) * (1 + 0.2 * |N(0,1)|)``, as the official code.
 
     ![F17 3D surface](img/3d/f17.png){ width=30% }
     ![F17 2D surface](img/2d/f17.png){ width=30% }
@@ -872,7 +875,7 @@ def f17(
         Function value(s).
     """
     base = f16(x, x_opt, f_opt, R, Q, _f_max=_f_max) - f_opt
-    return base * (1 + 0.4 * jnp.abs(jr.normal(key, shape=()))) + f_opt
+    return base * (1 + 0.2 * jnp.abs(jr.normal(key, shape=()))) + f_opt
 
 
 def _composition2_fns() -> list:
@@ -1098,7 +1101,12 @@ def _composition3_fns() -> list:
 
 
 def _composition4_fns() -> list:
-    """F24/F25: 10 different components."""
+    """F24/F25: 10 different components.
+
+    The last is the plain sphere: the noise-free list the height
+    normalization (``_f_max``) is computed from. :func:`f24` swaps in
+    the noisy sphere.
+    """
     return [
         cec2005_weierstrass,
         _expanded_scaffer_f6_base,
@@ -1109,7 +1117,7 @@ def _composition4_fns() -> list:
         _non_continuous_scaffer_f6_base,
         _non_continuous_rastrigin_base,
         _elliptic_base,
-        _sphere_noisy_base,
+        _sphere_base,
     ]
 
 
@@ -1376,7 +1384,11 @@ def f24(
     Rotation matrices with condition numbers
     [100, 50, 30, 10, 5, 5, 4, 3, 2, 2] are supplied by the factory.
     The 10th component (noisy sphere) applies multiplicative absolute
-    Gaussian noise: ``sphere(z) * (1 + 0.01 * |N(0,1)|)``.
+    Gaussian noise: ``sphere(z) * (1 + 0.1 * |N(0,1)|)``, as the
+    official code. Its height normalization is the precomputed,
+    noise-free ``_f_max`` the factory binds, so the noise acts; called
+    without ``_f_max``, the normalization is recomputed with the same
+    draw and the noise cancels.
 
     ![F24 3D surface](img/3d/f24.png){ width=30% }
     ![F24 2D surface](img/2d/f24.png){ width=30% }
@@ -1467,7 +1479,6 @@ def f24_true(
         Undisturbed function value(s).
     """
     fns = _composition4_fns()
-    fns[-1] = _sphere_base
     sigma = jnp.full(10, 2.0)
     lambda_ = jnp.array(
         [

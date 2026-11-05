@@ -669,17 +669,24 @@ def hybrid_composition(
 ) -> jax.Array:
     """Hybrid composition kernel for CEC 2005 F15-F25.
 
-    Uses the CEC 2005 composition structure with a smooth
-    winner-take-all approximation so the public benchmark
-    functions remain compatible with ``jax.grad``.
-
-    Paper structure::
+    Follows the official C code (``src/def2.c`` and ``src/def4.c``
+    of C-Unix-linux-14-Mar-05)::
 
         z = ((x - o_i) / lambda_i) * M_i
         fit_i = f_i(z)
         f_max_i = f_i((y / lambda_i) * M_i), y = [5,...,5]
         fit_i = C * fit_i / f_max_i
+        w_i = exp(-|x - o_i|^2 / (2 * D * sigma_i^2))
+        w_i *= (1 - w_max^10)    for every i but the largest
+        w_i /= sum(w)            (the sum after that step)
         F(x) = sum(w_i * [fit_i + bias_i])
+
+    The weights are computed relative to the largest one (in log
+    space), so they never all underflow; where the official code's
+    weights would all be 0 it falls back to uniform weights, this
+    kernel keeps the exact ratios. For ``jax.grad``, the choice of the
+    largest weight is differentiated through a steep softmax; the value
+    uses the exact choice.
 
     ``fns`` is a Python list of base functions — always bound
     as a Python constant at construction time, never a
@@ -721,20 +728,29 @@ def hybrid_composition(
     ndim = x.shape[-1]
     num_components = len(fns)
 
-    # --- Weights (CEC 2005 winner-take-all scheme) ---
+    # --- Weights (official def2.c calc_weight) ---
+    # w_i = exp(log_w_i); every weight but the largest is damped by
+    # (1 - w_max^10), then all are divided by their (damped) sum.
+    # Weights are taken relative to the largest, exp(log_w - log_w_max),
+    # so they cannot all underflow; the damping uses the unscaled
+    # maximum: 1 - w_max^10 = -expm1(10 * max(log_w)), 0 on an optimum.
+    # The stop_gradient on log_w_max is only safe in the rescaling (it
+    # cancels in the normalization); the damping depends on x through
+    # w_max, so it must keep its gradient.
     diffs = x[None, :] - x_opt
     dist_sq = jnp.sum(diffs**2, axis=-1)
     log_w = -dist_sq / (2.0 * ndim * sigma**2)
     log_w_max = jax.lax.stop_gradient(jnp.max(log_w))
     w = jnp.exp(log_w - log_w_max)
-    # SW = sum before suppression (paper divides by this)
-    sw = jnp.sum(w)
-    w_max = jax.lax.stop_gradient(jnp.max(w))
-    # Smooth max indicator for differentiability
-    is_max = jax.nn.softmax(1e4 * (w - w_max))
-    suppression = 1.0 - sj.clip_st(w_max, 0.0, 1.0) ** 10
-    w = w * (is_max + (1.0 - is_max) * suppression)
-    w = w / (sw + 1e-30)
+    damping = -jnp.expm1(10.0 * jnp.max(log_w))
+    # The largest weight(s) keep their value. Forward pass: the exact
+    # indicator (ties all count as largest, as in def2.c). Gradient: a
+    # steep softmax, so jax.grad sees which component is winning.
+    soft_is_max = jax.nn.softmax(1e4 * (log_w - log_w_max))
+    hard_is_max = (log_w == log_w_max).astype(w.dtype)
+    is_max = soft_is_max + jax.lax.stop_gradient(hard_is_max - soft_is_max)
+    w = w * (is_max + (1.0 - is_max) * damping)
+    w = w / jnp.sum(w)  # >= 1: the largest weight is exp(0) * 1
 
     # --- Evaluate each component ---
     def component_value(i: int) -> jax.Array:

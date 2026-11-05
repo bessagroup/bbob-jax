@@ -41,7 +41,10 @@ from bbob_jax._src.bounds import (
     cec2013lsgo_bounds,
     cec2017_bounds,
 )
-from bbob_jax._src.cec2005_tags import cec2005_function_characteristics
+from bbob_jax._src.cec2005_tags import (
+    cec2005_deviations,
+    cec2005_function_characteristics,
+)
 from bbob_jax._src.cec2013lsgo_tags import cec2013lsgo_function_characteristics
 from bbob_jax._src.cec2017_tags import cec2017_function_characteristics
 from bbob_jax._src.problem import Problem, problem
@@ -79,6 +82,7 @@ __all__ = [
     "cec2005_registry",
     "cec2005_registry_original",
     "cec2005_function_characteristics",
+    "cec2005_deviations",
     "cec2017_registry",
     "cec2017_registry_original",
     "cec2017_function_characteristics",
